@@ -249,8 +249,8 @@ export function InvoiceBuilder({
                     exit={{ opacity: 0, y: -12 }}
                     className="rounded-[26px] border border-white/10 bg-white/[0.03] p-4"
                   >
-                    {/* Row 1: identification + remove */}
-                    <div className="mb-2 flex flex-wrap items-end gap-3">
+                    {/* Row 1: Preset item | Item name | HSN/SAC | Trash */}
+                    <div className="mb-3 flex items-end gap-3">
                       <FormField label="Preset item" className="w-36 flex-none">
                         <Select
                           placeholder="From catalog"
@@ -271,14 +271,11 @@ export function InvoiceBuilder({
                           }}
                         />
                       </FormField>
-                      <FormField label="Item name" className="min-w-32 flex-1">
+                      <FormField label="Item name" className="flex-1 min-w-0">
                         <Input className="h-9" placeholder="Goods / service description" {...form.register(`items.${index}.item_name`)} />
                       </FormField>
-                      <FormField label="HSN / SAC" className="w-28">
+                      <FormField label="HSN / SAC" className="w-28 flex-none">
                         <Input className="h-9" placeholder="e.g. 9983" {...form.register(`items.${index}.hsn_sac_code`)} />
-                      </FormField>
-                      <FormField label="Unit" className="w-20">
-                        <Input className="h-9" placeholder="Nos" {...form.register(`items.${index}.unit`)} />
                       </FormField>
                       <button
                         type="button"
@@ -291,8 +288,11 @@ export function InvoiceBuilder({
                       </button>
                     </div>
 
-                    {/* Row 2: pricing — 5 equal columns */}
-                    <div className="grid grid-cols-5 gap-3">
+                    {/* Row 2: Unit | Qty | Rate | GST % */}
+                    <div className="mb-3 grid grid-cols-4 gap-3">
+                      <FormField label="Unit">
+                        <Input className="h-9" placeholder="Nos" {...form.register(`items.${index}.unit`)} />
+                      </FormField>
                       <FormField label="Qty">
                         <Input className="h-9" type="number" step={1} min={0} {...form.register(`items.${index}.quantity`, { valueAsNumber: true })} />
                       </FormField>
@@ -314,6 +314,10 @@ export function InvoiceBuilder({
                           <option value={28}>28%</option>
                         </select>
                       </FormField>
+                    </div>
+
+                    {/* Row 3: Discount % | Flat discount ₹ */}
+                    <div className="mb-3 grid grid-cols-2 gap-3">
                       <FormField label="Discount %">
                         <Input className="h-9" type="number" step="0.01" min={0} max={100} placeholder="0" {...form.register(`items.${index}.discount_percent`, { valueAsNumber: true })} />
                       </FormField>
@@ -322,7 +326,8 @@ export function InvoiceBuilder({
                       </FormField>
                     </div>
 
-                    <FormField label="Description" className="mt-3">
+                    {/* Row 4: Description */}
+                    <FormField label="Description">
                       <Textarea {...form.register(`items.${index}.description`)} className="min-h-[80px]" />
                     </FormField>
                   </motion.div>
