@@ -249,8 +249,8 @@ export function InvoiceBuilder({
                     exit={{ opacity: 0, y: -12 }}
                     className="rounded-[26px] border border-white/10 bg-white/[0.03] p-4"
                   >
-                    {/* Row 1: identification */}
-                    <div className="mb-2 flex flex-wrap gap-3">
+                    {/* Row 1: identification + remove */}
+                    <div className="mb-2 flex flex-wrap items-end gap-3">
                       <FormField label="Preset item" className="w-36 flex-none">
                         <Select
                           placeholder="From catalog"
@@ -280,17 +280,26 @@ export function InvoiceBuilder({
                       <FormField label="Unit" className="w-20">
                         <Input className="h-9" placeholder="Nos" {...form.register(`items.${index}.unit`)} />
                       </FormField>
+                      <button
+                        type="button"
+                        className="mb-1 self-end text-red-400/60 transition-colors hover:text-red-400 disabled:opacity-30"
+                        onClick={() => remove(index)}
+                        disabled={fields.length === 1}
+                        aria-label="Remove item"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
 
-                    {/* Row 2: pricing */}
-                    <div className="flex flex-wrap items-end gap-3">
-                      <FormField label="Qty" className="w-20">
+                    {/* Row 2: pricing — 5 equal columns */}
+                    <div className="grid grid-cols-5 gap-3">
+                      <FormField label="Qty">
                         <Input className="h-9" type="number" step={1} min={0} {...form.register(`items.${index}.quantity`, { valueAsNumber: true })} />
                       </FormField>
-                      <FormField label="Rate ₹" className="w-24">
+                      <FormField label="Rate ₹">
                         <Input className="h-9" type="number" step="0.01" min={0} {...form.register(`items.${index}.rate`, { valueAsNumber: true })} />
                       </FormField>
-                      <FormField label="GST %" className="w-24">
+                      <FormField label="GST %">
                         <Select
                           options={GST_OPTIONS.map((v) => ({ label: `${v}%`, value: String(v) }))}
                           value={String(Math.round(Number(form.watch(`items.${index}.gst_rate`))))}
@@ -299,24 +308,12 @@ export function InvoiceBuilder({
                           }
                         />
                       </FormField>
-                      <FormField label="Discount %" className="w-20">
+                      <FormField label="Discount %">
                         <Input className="h-9" type="number" step="0.01" min={0} max={100} placeholder="0" {...form.register(`items.${index}.discount_percent`, { valueAsNumber: true })} />
                       </FormField>
-                      <FormField label="Flat discount ₹" className="w-24">
+                      <FormField label="Flat discount ₹">
                         <Input className="h-9" type="number" step="0.01" min={0} placeholder="0" {...form.register(`items.${index}.discount_amount`, { valueAsNumber: true })} />
                       </FormField>
-                      <div className="ml-auto">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="h-9"
-                          onClick={() => remove(index)}
-                          disabled={fields.length === 1}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Remove
-                        </Button>
-                      </div>
                     </div>
 
                     <FormField label="Description" className="mt-3">
