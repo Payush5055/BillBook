@@ -359,6 +359,108 @@ export async function markInvoiceUnpaidAction(invoiceId: string) {
   revalidatePath("/payments");
 }
 
+export async function updateInvoiceAction(invoiceId: string, values: Record<string, unknown>): Promise<string> {
+  const payload = invoiceSchema.parse(values);
+  const { supabase, user } = await getCurrentUserOrThrow();
+
+  const [{ data: businessProfileData }, { data: customerData }] = await Promise.all([
+    supabase.from("business_profiles").select("*").eq("user_id", user.id).maybeSingle(),
+    supabase.from("customers").select("*").eq("id", payload.customer_id).eq("user_id", user.id).maybeSingle(),
+  ]);
+
+  const businessProfile = businessProfileData as BusinessProfile | null;
+  const customer = customerData as Customer | null;
+
+  if (!businessProfile) throw new Error("Business profile not found.");
+  if (!customer) throw new Error("Customer not found.");
+
+  const totals = calculateInvoiceTotals({
+    businessStateCode: businessProfile.state_code,
+    customerStateCode: customer.state_code,
+    documentType: payload.document_type,
+    items: payload.items,
+    flatDiscount: payload.flat_discount,
+    amountPaid: payload.amount_paid,
+  });
+
+  const status =
+    payload.mode === "draft"
+      ? "draft"
+      : resolveInvoiceStatus(totals.grandTotal, payload.amount_paid);
+
+  const { error: invoiceError } = await supabase
+    .from("invoices")
+    .update({
+      customer_id: payload.customer_id,
+      document_type: payload.document_type,
+      issue_date: payload.issue_date,
+      due_date: normalizeOptional(payload.due_date),
+      status,
+      payment_terms: normalizeOptional(payload.payment_terms),
+      notes: normalizeOptional(payload.notes),
+      remarks: normalizeOptional(payload.remarks),
+      place_of_supply_state_code: customer.state_code,
+      is_inter_state: totals.isInterState,
+      subtotal: totals.subtotal,
+      item_discount_total: totals.itemDiscountTotal,
+      invoice_discount_total: totals.invoiceDiscountTotal,
+      taxable_amount: totals.taxableAmount,
+      cgst_total: totals.cgstTotal,
+      sgst_total: totals.sgstTotal,
+      igst_total: totals.igstTotal,
+      total_tax_amount: totals.totalTaxAmount,
+      grand_total: totals.grandTotal,
+      amount_paid: payload.amount_paid,
+      amount_due: totals.amountDue,
+      amount_in_words: totals.amountInWords,
+    } as never)
+    .eq("id", invoiceId)
+    .eq("user_id", user.id);
+
+  if (invoiceError) throw new Error(invoiceError.message);
+
+  const { error: deleteError } = await supabase
+    .from("invoice_items")
+    .delete()
+    .eq("invoice_id", invoiceId);
+
+  if (deleteError) throw new Error(deleteError.message);
+
+  const { error: itemsError } = await supabase.from("invoice_items").insert(
+    totals.items.map((item) => ({
+      invoice_id: invoiceId,
+      product_id: normalizeOptional(item.product_id),
+      item_name: item.item_name,
+      description: normalizeOptional(item.description),
+      hsn_sac_code: normalizeOptional(item.hsn_sac_code),
+      quantity: item.quantity,
+      unit: item.unit,
+      rate: item.rate,
+      gst_rate: item.gst_rate,
+      discount_percent: item.discount_percent,
+      discount_amount: item.discount_amount,
+      line_subtotal: item.line_subtotal,
+      taxable_amount: item.taxable_amount,
+      cgst_amount: item.cgst_amount,
+      sgst_amount: item.sgst_amount,
+      igst_amount: item.igst_amount,
+      line_total: item.line_total,
+      sort_order: item.sort_order,
+    })) as never[],
+  );
+
+  if (itemsError) throw new Error(itemsError.message);
+
+  revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath(`/invoices/${invoiceId}/edit`);
+  revalidatePath("/invoices");
+  revalidatePath("/dashboard");
+  revalidatePath("/reports");
+  revalidatePath("/payments");
+
+  return invoiceId;
+}
+
 export async function sendInvoiceEmailAction(invoiceId: string): Promise<void> {
   const { supabase, user } = await getCurrentUserOrThrow();
 

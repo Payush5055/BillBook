@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CreditCard, Mail } from "lucide-react";
+import { CreditCard, Mail, Pencil } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PaymentForm } from "@/components/forms/payment-form";
 import { InvoiceActions } from "@/components/invoices/invoice-actions";
@@ -29,6 +30,7 @@ export function InvoiceDetailControls({
   autoAction?: "download" | "print" | null;
   customerEmail?: string | null;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [emailPending, startEmailTransition] = useTransition();
   const [pending, startTransition] = useTransition();
@@ -95,11 +97,20 @@ export function InvoiceDetailControls({
           Convert to invoice
         </Button>
       ) : null}
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => router.push(`/invoices/${invoiceId}/edit`)}
+        disabled={pending}
+      >
+        <Pencil className="mr-2 h-4 w-4" />
+        Edit
+      </Button>
       <Button type="button" variant="secondary" onClick={markUnpaid} disabled={pending}>
         Mark unpaid
       </Button>
       <Button type="button" variant="ghost" onClick={cancelDocument} disabled={pending}>
-        Cancel
+        Cancel invoice
       </Button>
       <InvoiceActions targetId="invoice-document" invoiceNumber={invoiceNumber} autoAction={autoAction} invoiceId={invoiceId} />
 
