@@ -115,8 +115,11 @@ export function generateGSTR1Json(
   }));
 
   // ── NIL ──────────────────────────────────────────────────────────────────
+  // Only non_gst_invoice document type counts; gst_invoice with ₹0 value does not.
   const nilAmt = roundCurrency(
-    nonGstInvoices.reduce((sum, inv) => sum + Number(inv.taxable_amount), 0),
+    nonGstInvoices
+      .filter((inv) => inv.document_type === "non_gst_invoice")
+      .reduce((sum, inv) => sum + Number(inv.taxable_amount), 0),
   );
 
   // ── HSN summary ──────────────────────────────────────────────────────────
