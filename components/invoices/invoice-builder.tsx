@@ -300,13 +300,19 @@ export function InvoiceBuilder({
                         <Input className="h-9" type="number" step="0.01" min={0} {...form.register(`items.${index}.rate`, { valueAsNumber: true })} />
                       </FormField>
                       <FormField label="GST %">
-                        <Select
-                          options={GST_OPTIONS.map((v) => ({ label: `${v}%`, value: String(v) }))}
-                          value={String(Math.round(Number(form.watch(`items.${index}.gst_rate`))))}
-                          onChange={(event) =>
-                            form.setValue(`items.${index}.gst_rate`, Number(event.target.value), { shouldDirty: true })
+                        <select
+                          className="h-9 w-full rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-teal-400"
+                          value={form.watch(`items.${index}.gst_rate`) ?? 18}
+                          onChange={(e) =>
+                            form.setValue(`items.${index}.gst_rate`, Number(e.target.value))
                           }
-                        />
+                        >
+                          <option value={0}>0%</option>
+                          <option value={5}>5%</option>
+                          <option value={12}>12%</option>
+                          <option value={18}>18%</option>
+                          <option value={28}>28%</option>
+                        </select>
                       </FormField>
                       <FormField label="Discount %">
                         <Input className="h-9" type="number" step="0.01" min={0} max={100} placeholder="0" {...form.register(`items.${index}.discount_percent`, { valueAsNumber: true })} />
