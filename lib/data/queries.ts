@@ -10,6 +10,7 @@ import type {
   PaymentListItem,
   Product,
 } from "@/lib/types";
+import type { GSTR1InvoiceInput } from "@/lib/gstr1";
 import { financialYearFromDate, roundCurrency } from "@/lib/utils";
 
 export async function getSessionUser() {
@@ -221,6 +222,54 @@ export async function getDashboardMetrics(userId: string) {
     recentPayments: recentPaymentRows,
     revenueChart,
   };
+}
+
+export async function getInvoicesForGSTR1(
+  userId: string,
+  month: number,
+  year: number,
+): Promise<GSTR1InvoiceInput[]> {
+  const supabase = await createClient();
+
+  const from = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .select(`
+      id,
+      invoice_number,
+      issue_date,
+      grand_total,
+      taxable_amount,
+      place_of_supply_state_code,
+      document_type,
+      is_inter_state,
+      customers ( gstin, state_code ),
+      invoice_items (
+        hsn_sac_code,
+        item_name,
+        quantity,
+        unit,
+        gst_rate,
+        taxable_amount,
+        cgst_amount,
+        sgst_amount,
+        igst_amount,
+        line_total
+      )
+    `)
+    .eq("user_id", userId)
+    .gte("issue_date", from)
+    .lte("issue_date", to)
+    .in("document_type", ["gst_invoice", "non_gst_invoice"])
+    .neq("status", "cancelled")
+    .is("deleted_at", null)
+    .order("issue_date", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as GSTR1InvoiceInput[];
 }
 
 export async function getReportsSnapshot(
