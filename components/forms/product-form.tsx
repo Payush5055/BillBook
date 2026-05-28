@@ -20,9 +20,11 @@ type FormValues = z.infer<typeof productSchema>;
 export function ProductForm({
   product,
   onSuccess,
+  onCancel,
 }: {
   product?: Product | null;
   onSuccess?: () => void;
+  onCancel?: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const form = useForm<FormValues>({
@@ -50,7 +52,7 @@ export function ProductForm({
       description: product?.description ?? "",
       item_type: product?.item_type ?? "service",
     });
-  }, [product, form]);
+  }, [product]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = (values: FormValues) => {
     startTransition(async () => {
@@ -106,9 +108,24 @@ export function ProductForm({
           <Textarea {...form.register("description")} />
         </FormField>
       </div>
-      <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? "Saving..." : product ? "Update item" : "Create item"}
-      </Button>
+      <div className="flex gap-3">
+        <Button type="submit" className="flex-1" disabled={pending}>
+          {pending ? "Saving..." : product ? "Update item" : "Create item"}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={pending}
+          onClick={() => {
+            if (form.formState.isDirty) {
+              if (!window.confirm("You have unsaved changes. Are you sure you want to leave?")) return;
+            }
+            onCancel?.();
+          }}
+        >
+          Cancel
+        </Button>
+      </div>
     </form>
   );
 }

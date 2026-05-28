@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { motion } from "framer-motion";
 import {
   CircleDollarSign,
@@ -18,7 +19,7 @@ const icons = {
   payment: CreditCard,
 } satisfies Record<string, LucideIcon>;
 
-export function MetricCard({
+export const MetricCard = memo(function MetricCard({
   index,
   title,
   value,
@@ -57,4 +58,4 @@ export function MetricCard({
       </Card>
     </motion.div>
   );
-}
+});

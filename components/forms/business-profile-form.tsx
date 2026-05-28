@@ -29,8 +29,8 @@ export function BusinessProfileForm({
   const form = useForm<FormValues>({
     resolver: zodResolver(businessProfileSchema),
     defaultValues: {
-      business_name: profile?.business_name ?? "",
-      address: profile?.address ?? "",
+      business_name: profile?.business_name || "Sai Shraddha Powers and Traders",
+      address: profile?.address || "Prakasha Sub Post Office, Sr No. 1977, Main Road, Prakasha, Nandurbar - 425422",
       gstin: profile?.gstin ?? "27FODPP3712Q1ZD",
       state: profile?.state ?? "Maharashtra",
       state_code: profile?.state_code ?? "27",

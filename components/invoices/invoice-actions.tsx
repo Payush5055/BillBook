@@ -1,22 +1,25 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import { useRef, useState, useEffect } from "react";
 import { Download, Printer } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 export function InvoiceActions({
   targetId,
   invoiceNumber,
   autoAction,
+  invoiceId,
 }: {
   targetId: string;
   invoiceNumber: string;
   autoAction?: "download" | "print" | null;
+  invoiceId?: string;
 }) {
+  const router = useRouter();
   const downloading = useRef(false);
   const hasAutoRun = useRef(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const downloadPdf = async () => {
     if (downloading.current) return;
@@ -24,7 +27,12 @@ export function InvoiceActions({
     if (!element) return;
 
     downloading.current = true;
+    setPdfLoading(true);
     try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
@@ -38,6 +46,7 @@ export function InvoiceActions({
       pdf.save(`${invoiceNumber}.pdf`);
     } finally {
       downloading.current = false;
+      setPdfLoading(false);
     }
   };
 
@@ -45,13 +54,16 @@ export function InvoiceActions({
     if (hasAutoRun.current) return;
     if (autoAction === "download") {
       hasAutoRun.current = true;
-      void downloadPdf();
+      downloadPdf().then(() => {
+        if (invoiceId) router.replace(`/invoices/${invoiceId}`);
+      });
     }
     if (autoAction === "print") {
       hasAutoRun.current = true;
       window.print();
+      if (invoiceId) router.replace(`/invoices/${invoiceId}`);
     }
-  }, [autoAction]);
+  }, [autoAction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-wrap gap-3">
@@ -59,9 +71,9 @@ export function InvoiceActions({
         <Printer className="mr-2 h-4 w-4" />
         Print
       </Button>
-      <Button type="button" onClick={downloadPdf}>
+      <Button type="button" onClick={downloadPdf} disabled={pdfLoading}>
         <Download className="mr-2 h-4 w-4" />
-        Download PDF
+        {pdfLoading ? "Generating..." : "Download PDF"}
       </Button>
     </div>
   );

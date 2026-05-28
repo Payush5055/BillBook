@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Clock3, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import { MetricCard } from "@/components/dashboard/metric-card";
-import { RevenueChart } from "@/components/dashboard/revenue-chart";
+import { RevenueChartLoader } from "@/components/dashboard/revenue-chart-loader";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -50,7 +50,7 @@ export default async function DashboardPage() {
             </div>
             <Badge>Animated analytics</Badge>
           </div>
-          <RevenueChart data={metrics.revenueChart} />
+          <RevenueChartLoader data={metrics.revenueChart} />
         </Card>
 
         <Card className="space-y-4">

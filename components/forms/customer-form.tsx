@@ -20,9 +20,11 @@ type FormValues = z.infer<typeof customerSchema>;
 export function CustomerForm({
   customer,
   onSuccess,
+  onCancel,
 }: {
   customer?: Customer | null;
   onSuccess?: () => void;
+  onCancel?: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const form = useForm<FormValues>({
@@ -52,7 +54,7 @@ export function CustomerForm({
       email: customer?.email ?? "",
       notes: customer?.notes ?? "",
     });
-  }, [customer, form]);
+  }, [customer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = (values: FormValues) => {
     startTransition(async () => {
@@ -105,9 +107,24 @@ export function CustomerForm({
           <Textarea {...form.register("notes")} />
         </FormField>
       </div>
-      <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? "Saving..." : customer ? "Update customer" : "Create customer"}
-      </Button>
+      <div className="flex gap-3">
+        <Button type="submit" className="flex-1" disabled={pending}>
+          {pending ? "Saving..." : customer ? "Update customer" : "Create customer"}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={pending}
+          onClick={() => {
+            if (form.formState.isDirty) {
+              if (!window.confirm("You have unsaved changes. Are you sure you want to leave?")) return;
+            }
+            onCancel?.();
+          }}
+        >
+          Cancel
+        </Button>
+      </div>
     </form>
   );
 }

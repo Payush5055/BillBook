@@ -43,6 +43,7 @@ export default async function InvoiceDetailPage({
             amountDue={invoiceRecord.amount_due}
             invoiceNumber={invoiceRecord.invoice_number}
             documentType={invoiceRecord.document_type}
+            customerEmail={customer.email ?? null}
             autoAction={
               resolvedSearchParams?.auto === "download" || resolvedSearchParams?.auto === "print"
                 ? resolvedSearchParams.auto

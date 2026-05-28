@@ -86,16 +86,16 @@ export function InvoiceList({ invoices }: { invoices: InvoiceListItem[] }) {
                     onClick={() =>
                       duplicateDocument(
                         invoice.id,
-                        invoice.document_type === "quotation" ? "gst_invoice" : invoice.document_type,
+                        ["quotation", "proforma_invoice"].includes(invoice.document_type) ? "gst_invoice" : invoice.document_type,
                       )
                     }
                   >
-                    {invoice.document_type === "quotation" ? (
+                    {["quotation", "proforma_invoice"].includes(invoice.document_type) ? (
                       <FilePlus2 className="mr-2 h-4 w-4" />
                     ) : (
                       <Copy className="mr-2 h-4 w-4" />
                     )}
-                    {invoice.document_type === "quotation" ? "Convert" : "Duplicate"}
+                    {["quotation", "proforma_invoice"].includes(invoice.document_type) ? "Convert" : "Duplicate"}
                   </Button>
                   <Button
                     type="button"

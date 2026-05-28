@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CreditCard } from "lucide-react";
+import { CreditCard, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { PaymentForm } from "@/components/forms/payment-form";
 import { InvoiceActions } from "@/components/invoices/invoice-actions";
@@ -11,6 +11,7 @@ import {
   cancelInvoiceAction,
   duplicateInvoiceAction,
   markInvoiceUnpaidAction,
+  sendInvoiceEmailAction,
 } from "@/lib/actions";
 
 export function InvoiceDetailControls({
@@ -19,14 +20,17 @@ export function InvoiceDetailControls({
   invoiceNumber,
   documentType,
   autoAction,
+  customerEmail,
 }: {
   invoiceId: string;
   amountDue: number;
   invoiceNumber: string;
   documentType: string;
   autoAction?: "download" | "print" | null;
+  customerEmail?: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [emailPending, startEmailTransition] = useTransition();
   const [pending, startTransition] = useTransition();
 
   const convertToInvoice = () => {
@@ -63,13 +67,30 @@ export function InvoiceDetailControls({
     });
   };
 
+  const sendEmail = () => {
+    startEmailTransition(async () => {
+      try {
+        await sendInvoiceEmailAction(invoiceId);
+        toast.success(`Email sent to ${customerEmail}.`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Unable to send email.");
+      }
+    });
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-3">
       <Button type="button" variant="secondary" onClick={() => setOpen(true)} disabled={amountDue <= 0}>
         <CreditCard className="mr-2 h-4 w-4" />
         Record payment
       </Button>
-      {documentType === "quotation" ? (
+      {customerEmail ? (
+        <Button type="button" variant="secondary" onClick={sendEmail} disabled={emailPending}>
+          <Mail className="mr-2 h-4 w-4" />
+          {emailPending ? "Sending..." : "Send email"}
+        </Button>
+      ) : null}
+      {["quotation", "proforma_invoice"].includes(documentType) ? (
         <Button type="button" variant="secondary" onClick={convertToInvoice} disabled={pending}>
           Convert to invoice
         </Button>
@@ -80,7 +101,7 @@ export function InvoiceDetailControls({
       <Button type="button" variant="ghost" onClick={cancelDocument} disabled={pending}>
         Cancel
       </Button>
-      <InvoiceActions targetId="invoice-document" invoiceNumber={invoiceNumber} autoAction={autoAction} />
+      <InvoiceActions targetId="invoice-document" invoiceNumber={invoiceNumber} autoAction={autoAction} invoiceId={invoiceId} />
 
       <Dialog
         open={open}

@@ -6,7 +6,7 @@ import type { Database } from "@/lib/database.types";
 import { calculateInvoiceTotals, resolveInvoiceStatus } from "@/lib/gst";
 import { createClient } from "@/lib/supabase/server";
 import { uploadAsset } from "@/lib/supabase/storage";
-import type { BusinessProfile, Customer } from "@/lib/types";
+import type { BusinessProfile, Customer, Invoice } from "@/lib/types";
 import {
   authSchema,
   businessProfileSchema,
@@ -357,6 +357,49 @@ export async function markInvoiceUnpaidAction(invoiceId: string) {
   revalidatePath("/dashboard");
   revalidatePath("/reports");
   revalidatePath("/payments");
+}
+
+export async function sendInvoiceEmailAction(invoiceId: string): Promise<void> {
+  const { supabase, user } = await getCurrentUserOrThrow();
+
+  const [{ data: invoiceData }, { data: profileData }] = await Promise.all([
+    supabase
+      .from("invoices")
+      .select("*, customers(*)")
+      .eq("id", invoiceId)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase.from("business_profiles").select("*").eq("user_id", user.id).maybeSingle(),
+  ]);
+
+  if (!invoiceData) throw new Error("Invoice not found.");
+  if (!profileData) throw new Error("Business profile not set up.");
+
+  const invoice = invoiceData as Invoice & { customers: Customer };
+  const profile = profileData as BusinessProfile;
+  const customer = invoice.customers;
+
+  if (!customer?.email) throw new Error("Customer has no email address.");
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/api/email/send`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        invoiceId,
+        recipientEmail: customer.email,
+        recipientName: customer.customer_name,
+        invoiceNumber: invoice.invoice_number,
+        businessName: profile.business_name,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? "Failed to send email.");
+  }
 }
 
 export async function softDeleteInvoiceAction(invoiceId: string) {

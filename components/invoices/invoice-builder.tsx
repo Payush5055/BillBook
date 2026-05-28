@@ -5,6 +5,7 @@ import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "framer-motion";
 import { Plus, Sparkles, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ export function InvoiceBuilder({
   customers: Customer[];
   products: Product[];
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const form = useForm<FormValues>({
     resolver: zodResolver(invoiceSchema),
@@ -104,6 +106,13 @@ export function InvoiceBuilder({
         toast.error(error instanceof Error ? error.message : "Unable to create invoice.");
       }
     });
+  };
+
+  const handleCancel = () => {
+    if (form.formState.isDirty) {
+      if (!window.confirm("You have unsaved changes. Are you sure you want to leave?")) return;
+    }
+    router.push("/dashboard");
   };
 
   const createWithAction = (values: FormValues, action?: "download" | "print") => {
@@ -235,7 +244,7 @@ export function InvoiceBuilder({
 
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
                       <FormField label="Qty">
-                        <Input type="number" step="0.01" {...form.register(`items.${index}.quantity`, { valueAsNumber: true })} />
+                        <Input type="number" step={1} min={0} {...form.register(`items.${index}.quantity`, { valueAsNumber: true })} />
                       </FormField>
                       <FormField label="Rate">
                         <Input type="number" step="0.01" {...form.register(`items.${index}.rate`, { valueAsNumber: true })} />
@@ -325,6 +334,14 @@ export function InvoiceBuilder({
                 disabled={pending}
               >
                 Save draft
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleCancel}
+                disabled={pending}
+              >
+                Cancel
               </Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">

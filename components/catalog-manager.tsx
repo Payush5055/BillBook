@@ -126,6 +126,10 @@ export function CatalogManager({ products }: { products: Product[] }) {
             setOpen(false);
             setSelectedProduct(null);
           }}
+          onCancel={() => {
+            setOpen(false);
+            setSelectedProduct(null);
+          }}
         />
       </Dialog>
     </>

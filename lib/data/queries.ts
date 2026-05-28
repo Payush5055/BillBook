@@ -143,7 +143,7 @@ export async function getDashboardMetrics(userId: string) {
     await Promise.all([
       supabase
         .from("invoices")
-        .select("*")
+        .select("id, issue_date, grand_total, amount_paid, amount_due, cgst_total, sgst_total, igst_total")
         .eq("user_id", userId)
         .is("deleted_at", null)
         .neq("status", "cancelled"),

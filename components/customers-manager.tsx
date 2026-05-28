@@ -155,6 +155,10 @@ export function CustomersManager({
             setOpen(false);
             setSelectedCustomer(null);
           }}
+          onCancel={() => {
+            setOpen(false);
+            setSelectedCustomer(null);
+          }}
         />
       </Dialog>
     </>
