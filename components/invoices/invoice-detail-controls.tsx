@@ -18,11 +18,13 @@ export function InvoiceDetailControls({
   amountDue,
   invoiceNumber,
   documentType,
+  autoAction,
 }: {
   invoiceId: string;
   amountDue: number;
   invoiceNumber: string;
   documentType: string;
+  autoAction?: "download" | "print" | null;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -78,7 +80,7 @@ export function InvoiceDetailControls({
       <Button type="button" variant="ghost" onClick={cancelDocument} disabled={pending}>
         Cancel
       </Button>
-      <InvoiceActions targetId="invoice-document" invoiceNumber={invoiceNumber} />
+      <InvoiceActions targetId="invoice-document" invoiceNumber={invoiceNumber} autoAction={autoAction} />
 
       <Dialog
         open={open}

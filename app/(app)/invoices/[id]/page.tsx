@@ -8,13 +8,16 @@ import { getBusinessProfile, getInvoiceById, getSessionUser } from "@/lib/data/q
 
 export default async function InvoiceDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ auto?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const [businessProfile, invoiceRecord] = await Promise.all([
     getBusinessProfile(user.id),
     getInvoiceById(user.id, id),
@@ -40,6 +43,11 @@ export default async function InvoiceDetailPage({
             amountDue={invoiceRecord.amount_due}
             invoiceNumber={invoiceRecord.invoice_number}
             documentType={invoiceRecord.document_type}
+            autoAction={
+              resolvedSearchParams?.auto === "download" || resolvedSearchParams?.auto === "print"
+                ? resolvedSearchParams.auto
+                : null
+            }
           />
         }
       />

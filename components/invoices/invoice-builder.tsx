@@ -106,6 +106,21 @@ export function InvoiceBuilder({
     });
   };
 
+  const createWithAction = (values: FormValues, action?: "download" | "print") => {
+    startTransition(async () => {
+      try {
+        const invoiceId = await createInvoiceAction(values);
+        toast.success(values.mode === "draft" ? "Draft saved." : "Invoice created.");
+        if (typeof window !== "undefined" && invoiceId) {
+          const suffix = action ? `?auto=${action}` : "";
+          window.location.href = `/invoices/${invoiceId}${suffix}`;
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Unable to create invoice.");
+      }
+    });
+  };
+
   return (
     <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)}>
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
@@ -306,13 +321,31 @@ export function InvoiceBuilder({
               <Button
                 type="button"
                 variant="secondary"
-                onClick={form.handleSubmit((values) => onSubmit({ ...values, mode: "draft" }))}
+                onClick={form.handleSubmit((values) => createWithAction({ ...values, mode: "draft" }))}
                 disabled={pending}
               >
                 Save draft
               </Button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
               <Button type="submit" disabled={pending}>
                 {pending ? "Publishing..." : "Create document"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pending}
+                onClick={form.handleSubmit((values) => createWithAction(values, "download"))}
+              >
+                Create & download PDF
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pending}
+                onClick={form.handleSubmit((values) => createWithAction(values, "print"))}
+              >
+                Create & print
               </Button>
             </div>
           </Card>

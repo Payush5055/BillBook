@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CircleDollarSign, Clock3, CreditCard, Plus, Receipt, Wallet } from "lucide-react";
+import { ArrowRight, Clock3, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { RevenueChart } from "@/components/dashboard/revenue-chart";
@@ -35,10 +35,10 @@ export default async function DashboardPage() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard index={0} title="Invoices this month" value={metrics.totalInvoicesThisMonth} icon={Receipt} hint="Live month-to-date document volume." />
-        <MetricCard index={1} title="Total revenue" value={metrics.totalRevenue} icon={CircleDollarSign} currency hint="Gross billed value across invoices." />
-        <MetricCard index={2} title="Pending amount" value={metrics.totalPending} icon={Wallet} currency hint="Outstanding customer receivables." />
-        <MetricCard index={3} title="Collected amount" value={metrics.totalPaid} icon={CreditCard} currency hint="Payments successfully recorded." />
+        <MetricCard index={0} title="Invoices this month" value={metrics.totalInvoicesThisMonth} icon="receipt" hint="Live month-to-date document volume." />
+        <MetricCard index={1} title="Total revenue" value={metrics.totalRevenue} icon="revenue" currency hint="Gross billed value across invoices." />
+        <MetricCard index={2} title="Pending amount" value={metrics.totalPending} icon="wallet" currency hint="Outstanding customer receivables." />
+        <MetricCard index={3} title="Collected amount" value={metrics.totalPaid} icon="payment" currency hint="Payments successfully recorded." />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">

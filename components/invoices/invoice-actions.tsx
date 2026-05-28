@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { Download, Printer } from "lucide-react";
@@ -9,11 +9,14 @@ import { Button } from "@/components/ui/button";
 export function InvoiceActions({
   targetId,
   invoiceNumber,
+  autoAction,
 }: {
   targetId: string;
   invoiceNumber: string;
+  autoAction?: "download" | "print" | null;
 }) {
   const downloading = useRef(false);
+  const hasAutoRun = useRef(false);
 
   const downloadPdf = async () => {
     if (downloading.current) return;
@@ -37,6 +40,18 @@ export function InvoiceActions({
       downloading.current = false;
     }
   };
+
+  useEffect(() => {
+    if (hasAutoRun.current) return;
+    if (autoAction === "download") {
+      hasAutoRun.current = true;
+      void downloadPdf();
+    }
+    if (autoAction === "print") {
+      hasAutoRun.current = true;
+      window.print();
+    }
+  }, [autoAction]);
 
   return (
     <div className="flex flex-wrap gap-3">

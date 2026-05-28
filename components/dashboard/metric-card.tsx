@@ -1,25 +1,40 @@
 "use client";
 
 import { motion } from "framer-motion";
-import type { LucideIcon } from "lucide-react";
+import {
+  CircleDollarSign,
+  CreditCard,
+  Receipt,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { CountUpValue } from "@/components/dashboard/count-up";
+
+const icons = {
+  receipt: Receipt,
+  revenue: CircleDollarSign,
+  wallet: Wallet,
+  payment: CreditCard,
+} satisfies Record<string, LucideIcon>;
 
 export function MetricCard({
   index,
   title,
   value,
-  icon: Icon,
+  icon,
   currency,
   hint,
 }: {
   index: number;
   title: string;
   value: number;
-  icon: LucideIcon;
+  icon: keyof typeof icons;
   currency?: boolean;
   hint: string;
 }) {
+  const Icon = icons[icon];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 18 }}
