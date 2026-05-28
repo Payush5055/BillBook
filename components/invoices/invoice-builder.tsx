@@ -249,11 +249,11 @@ export function InvoiceBuilder({
                     exit={{ opacity: 0, y: -12 }}
                     className="rounded-[26px] border border-white/10 bg-white/[0.03] p-4"
                   >
-                    {/* Row 1: identification fields */}
-                    <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.4fr_1.4fr_0.9fr_0.7fr]">
-                      <FormField label="Preset item (catalog)">
+                    {/* Row 1: identification */}
+                    <div className="mb-2 flex flex-wrap gap-3">
+                      <FormField label="Preset item" className="w-36 flex-none">
                         <Select
-                          placeholder="Select from catalog"
+                          placeholder="From catalog"
                           options={products.map((product) => ({
                             label: `${product.item_name} • ${formatCurrency(product.rate)}`,
                             value: product.id,
@@ -267,51 +267,49 @@ export function InvoiceBuilder({
                             form.setValue(`items.${index}.hsn_sac_code`, selected.hsn_sac_code ?? "");
                             form.setValue(`items.${index}.rate`, selected.rate);
                             form.setValue(`items.${index}.unit`, selected.unit);
-                            form.setValue(`items.${index}.gst_rate`, selected.default_gst_rate);
+                            form.setValue(`items.${index}.gst_rate`, Number(selected.default_gst_rate));
                           }}
                         />
                       </FormField>
-                      <FormField label="Item name *">
-                        <Input {...form.register(`items.${index}.item_name`)} placeholder="Description of goods / service" />
+                      <FormField label="Item name" className="min-w-32 flex-1">
+                        <Input className="h-9" placeholder="Goods / service description" {...form.register(`items.${index}.item_name`)} />
                       </FormField>
-                      <FormField label="HSN / SAC code">
-                        <Input {...form.register(`items.${index}.hsn_sac_code`)} placeholder="e.g. 9983" />
+                      <FormField label="HSN / SAC" className="w-28">
+                        <Input className="h-9" placeholder="e.g. 9983" {...form.register(`items.${index}.hsn_sac_code`)} />
                       </FormField>
-                      <FormField label="Unit">
-                        <Input {...form.register(`items.${index}.unit`)} placeholder="Nos" />
+                      <FormField label="Unit" className="w-20">
+                        <Input className="h-9" placeholder="Nos" {...form.register(`items.${index}.unit`)} />
                       </FormField>
                     </div>
 
-                    {/* Row 2: quantity, pricing, tax, discounts, remove */}
-                    <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-[0.6fr_1fr_0.7fr_0.8fr_0.8fr_auto]">
-                      <FormField label="Qty">
-                        <Input type="number" step={1} min={0} {...form.register(`items.${index}.quantity`, { valueAsNumber: true })} />
+                    {/* Row 2: pricing */}
+                    <div className="flex flex-wrap items-end gap-3">
+                      <FormField label="Qty" className="w-20">
+                        <Input className="h-9" type="number" step={1} min={0} {...form.register(`items.${index}.quantity`, { valueAsNumber: true })} />
                       </FormField>
-                      <FormField label="Rate (₹)">
-                        <Input type="number" step="0.01" min={0} {...form.register(`items.${index}.rate`, { valueAsNumber: true })} />
+                      <FormField label="Rate ₹" className="w-24">
+                        <Input className="h-9" type="number" step="0.01" min={0} {...form.register(`items.${index}.rate`, { valueAsNumber: true })} />
                       </FormField>
-                      <FormField label="GST %">
+                      <FormField label="GST %" className="w-24">
                         <Select
-                          options={GST_OPTIONS.map((value) => ({ label: `${value}%`, value: String(value) }))}
-                          value={String(form.watch(`items.${index}.gst_rate`))}
+                          options={GST_OPTIONS.map((v) => ({ label: `${v}%`, value: String(v) }))}
+                          value={String(Math.round(Number(form.watch(`items.${index}.gst_rate`))))}
                           onChange={(event) =>
-                            form.setValue(`items.${index}.gst_rate`, Number(event.target.value), {
-                              shouldDirty: true,
-                            })
+                            form.setValue(`items.${index}.gst_rate`, Number(event.target.value), { shouldDirty: true })
                           }
                         />
                       </FormField>
-                      <FormField label="Discount %">
-                        <Input type="number" step="0.01" min={0} max={100} placeholder="0" {...form.register(`items.${index}.discount_percent`, { valueAsNumber: true })} />
+                      <FormField label="Discount %" className="w-20">
+                        <Input className="h-9" type="number" step="0.01" min={0} max={100} placeholder="0" {...form.register(`items.${index}.discount_percent`, { valueAsNumber: true })} />
                       </FormField>
-                      <FormField label="Flat discount (₹)">
-                        <Input type="number" step="0.01" min={0} placeholder="0" {...form.register(`items.${index}.discount_amount`, { valueAsNumber: true })} />
+                      <FormField label="Flat discount ₹" className="w-24">
+                        <Input className="h-9" type="number" step="0.01" min={0} placeholder="0" {...form.register(`items.${index}.discount_amount`, { valueAsNumber: true })} />
                       </FormField>
-                      <div className="flex items-end">
+                      <div className="ml-auto">
                         <Button
                           type="button"
                           variant="ghost"
-                          className="w-full min-w-[80px]"
+                          className="h-9"
                           onClick={() => remove(index)}
                           disabled={fields.length === 1}
                         >
