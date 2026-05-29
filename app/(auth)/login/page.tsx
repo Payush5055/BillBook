@@ -13,7 +13,7 @@ const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mon
 const STATE_NAMES = ["TWIN ENERGY STREAMS","DNA HELIX VORTEX","COSMIC HORIZON WAVE","GLOWING SPHERE","BLACK HOLE"];
 const STATE_DURATION = 9000;
 const TRANSITION_DURATION = 2000;
-const PARTICLE_COUNT = 400;
+const PARTICLE_COUNT = 500;
 
 function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 
@@ -54,55 +54,46 @@ function computeTarget(i: number, state: number, t: number, W: number, H: number
   return { x: cx+Math.cos(da)*dr, y: cy+Math.sin(da)*dr*0.28 };
 }
 
-function particleColor(i: number, state: number, _t: number): [number, number, number] {
-  const frac = i / PARTICLE_COUNT;
+function particleColor(i: number, state: number, _t: number): [number, number, number, number] {
+  const p = i / PARTICLE_COUNT;
 
   if (state === 0) {
-    // Twin Energy Streams: left ribbon purple, right ribbon orange
-    return i % 2 === 0 ? [150, 80, 255] : [255, 100, 30];
+    // Twin Energy Streams: saturated purple + vivid orange
+    const a = 0.7 + Math.sin(p * 6) * 0.3;
+    return i % 2 === 0 ? [139, 92, 246, a] : [249, 115, 22, a];
   }
 
   if (state === 1) {
-    // DNA Helix: white core → electric cyan-blue edges
-    const phi = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * frac)));
-    const edgeness = Math.abs(Math.sin(phi)); // 0 at poles, 1 at equator
-    return [
-      Math.round(lerp(255, 100, edgeness)),
-      Math.round(lerp(255, 200, edgeness)),
-      255,
-    ];
+    // DNA Helix: strand 0 = bright ice-white core, strand 1 = electric cyan
+    return i % 2 === 0
+      ? [224, 247, 255, 0.8 + Math.sin(p * 8) * 0.2]
+      : [103, 232, 249, 0.6 + Math.sin(p * 4) * 0.3];
   }
 
   if (state === 2) {
     if (i < 280) {
-      // Wave: deep blue (30,80,200) → warm red (255,80,30) across x-axis
-      const t01 = Math.max(0, Math.min(1, frac * 1.4 - 0.05));
-      return [
-        Math.round(lerp(30, 255, t01)),
-        80,
-        Math.round(lerp(200, 30, t01)),
-      ];
+      // Wave: deep navy (30,64,175) → vivid red (239,68,68)
+      const R = Math.floor(lerp(30, 239, p));
+      const G = Math.floor(lerp(64, 68, p));
+      const B = Math.floor(lerp(175, 68, p));
+      return [R, G, B, 0.75];
     }
-    // Starfield: pure white (alpha handled separately)
-    return [255, 255, 255];
+    // Starfield — each star gets its own random brightness
+    return [255, 255, 255, Math.random() * 0.5 + 0.1];
   }
 
   if (state === 3) {
-    // Glowing sphere: white core → electric blue mid → deep blue/red outer
-    const phi = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * frac)));
-    const n = phi / Math.PI; // 0=top 1=bottom
-    if (n < 0.3) {
-      const t01 = n / 0.3;
-      return [Math.round(lerp(255, 50, t01)), Math.round(lerp(255, 150, t01)), 255];
-    }
-    if (n < 0.65) return [50, 150, 255];
-    const t01 = (n - 0.65) / 0.35;
-    return [Math.round(lerp(20, 200, t01)), Math.round(lerp(60, 50, t01)), Math.round(lerp(180, 30, t01))];
+    // Glowing sphere — 3 zones by Fibonacci theta angle
+    const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+    const ang = Math.atan2(Math.sin(theta) * 0.55, Math.cos(theta));
+    if (ang > 1)  return [236, 72, 153, 0.75];  // top: hot pink
+    if (ang < -1) return [59, 130, 246, 0.75];  // bottom: electric blue
+    return [124, 58, 237, 0.75];                 // mid: vivid violet
   }
 
-  // State 4 — Black Hole accretion disk
-  // Bright rim for innermost particles, blue-white for the rest
-  return frac < 0.12 ? [200, 220, 255] : [100, 180, 255];
+  // State 4 — Black Hole: white inner ring → blue-white fading outward
+  const a4 = Math.max(0.5, 0.8 - (i / PARTICLE_COUNT) * 0.5);
+  return i < Math.floor(PARTICLE_COUNT * 0.12) ? [255, 255, 255, 0.9] : [191, 219, 254, a4];
 }
 
 function useParticleCanvas(canvasOpacity: number) {
@@ -146,7 +137,7 @@ function useParticleCanvas(canvasOpacity: number) {
 
       const fade = opacityRef.current;
 
-      ctx.fillStyle = `rgba(0,0,0,${fade < 0.1 ? 1 : 0.15})`;
+      ctx.fillStyle = `rgba(0,0,0,${fade < 0.1 ? 1 : 0.12})`;
       ctx.fillRect(0, 0, W, H);
 
       for (let i = 0; i < PARTICLE_COUNT; i++) {
@@ -166,17 +157,27 @@ function useParticleCanvas(canvasOpacity: number) {
         p.vx *= 0.88; p.vy *= 0.88;
         p.x += p.vx; p.y += p.vy;
 
-        let cr: number, cg: number, cb: number;
+        let cr: number, cg: number, cb: number, baseAlpha: number;
         if (transitioning) {
-          const [ar,ag,ab] = particleColor(i,stateIndex,t);
-          const [br,bg,bb] = particleColor(i,nextState,t);
+          const [ar,ag,ab,aa] = particleColor(i,stateIndex,t);
+          const [br,bg,bb,ba] = particleColor(i,nextState,t);
           cr=Math.round(lerp(ar,br,tp)); cg=Math.round(lerp(ag,bg,tp)); cb=Math.round(lerp(ab,bb,tp));
-        } else { [cr,cg,cb] = particleColor(i,stateIndex,t); }
+          baseAlpha = lerp(aa, ba, tp);
+        } else { [cr,cg,cb,baseAlpha] = particleColor(i,stateIndex,t); }
 
-        const alpha = (0.7+Math.sin(t*2+i)*0.15) * fade;
-        ctx.shadowColor = `rgb(${cr},${cg},${cb})`; ctx.shadowBlur = 6;
+        const alpha = Math.max(0.5, baseAlpha) * fade;
+        ctx.shadowColor = `rgb(${cr},${cg},${cb})`; ctx.shadowBlur = 7;
         ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha.toFixed(2)})`;
-        const drawSize = stateIndex === 1 ? 2.5 : p.size;
+
+        // Per-state particle sizes — norm maps stored [1,3] to target range
+        const norm = (p.size - 1) / 2.0;
+        let drawSize: number;
+        if (stateIndex === 0) drawSize = 1.5 + norm * 1.0;       // 1.5–2.5
+        else if (stateIndex === 1) drawSize = 1.5 + norm * 1.5;  // 1.5–3.0
+        else if (stateIndex === 3) drawSize = 1.5 + norm * 1.0;  // 1.5–2.5
+        else if (stateIndex === 4) drawSize = 1.0 + norm * 1.0;  // 1.0–2.0
+        else drawSize = p.size;
+
         ctx.beginPath(); ctx.arc(p.x, p.y, drawSize, 0, Math.PI*2); ctx.fill();
       }
 
