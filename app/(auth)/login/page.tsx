@@ -54,13 +54,55 @@ function computeTarget(i: number, state: number, t: number, W: number, H: number
   return { x: cx+Math.cos(da)*dr, y: cy+Math.sin(da)*dr*0.28 };
 }
 
-function particleColor(i: number, state: number, t: number): [number, number, number] {
-  const frac = i/PARTICLE_COUNT;
-  if (state === 0) return i%2===0 ? hsl(280,1,0.6) : hsl(30,1,0.65);
-  if (state === 1) return hsl(200+frac*40, 0.9, 0.55+frac*0.2);
-  if (state === 2) return i<280 ? hsl(frac<0.5?220:0,0.9,0.6) : hsl(60,0.4,0.9);
-  if (state === 3) return hsl((frac*120+300+t*10)%360, 0.9, 0.65);
-  return hsl((frac*60+20)%360, 1, 0.55+frac*0.2);
+function particleColor(i: number, state: number, _t: number): [number, number, number] {
+  const frac = i / PARTICLE_COUNT;
+
+  if (state === 0) {
+    // Twin Energy Streams: left ribbon purple, right ribbon orange
+    return i % 2 === 0 ? [150, 80, 255] : [255, 100, 30];
+  }
+
+  if (state === 1) {
+    // DNA Helix: white core → electric cyan-blue edges
+    const phi = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * frac)));
+    const edgeness = Math.abs(Math.sin(phi)); // 0 at poles, 1 at equator
+    return [
+      Math.round(lerp(255, 100, edgeness)),
+      Math.round(lerp(255, 200, edgeness)),
+      255,
+    ];
+  }
+
+  if (state === 2) {
+    if (i < 280) {
+      // Wave: deep blue (30,80,200) → warm red (255,80,30) across x-axis
+      const t01 = Math.max(0, Math.min(1, frac * 1.4 - 0.05));
+      return [
+        Math.round(lerp(30, 255, t01)),
+        80,
+        Math.round(lerp(200, 30, t01)),
+      ];
+    }
+    // Starfield: pure white (alpha handled separately)
+    return [255, 255, 255];
+  }
+
+  if (state === 3) {
+    // Glowing sphere: white core → electric blue mid → deep blue/red outer
+    const phi = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * frac)));
+    const n = phi / Math.PI; // 0=top 1=bottom
+    if (n < 0.3) {
+      const t01 = n / 0.3;
+      return [Math.round(lerp(255, 50, t01)), Math.round(lerp(255, 150, t01)), 255];
+    }
+    if (n < 0.65) return [50, 150, 255];
+    const t01 = (n - 0.65) / 0.35;
+    return [Math.round(lerp(20, 200, t01)), Math.round(lerp(60, 50, t01)), Math.round(lerp(180, 30, t01))];
+  }
+
+  // State 4 — Black Hole accretion disk
+  // Bright rim for innermost particles, blue-white for the rest
+  return frac < 0.12 ? [200, 220, 255] : [100, 180, 255];
 }
 
 function useParticleCanvas(canvasOpacity: number) {
@@ -82,7 +124,7 @@ function useParticleCanvas(canvasOpacity: number) {
     type P = { x:number; y:number; tx:number; ty:number; vx:number; vy:number; size:number };
     const particles: P[] = Array.from({ length: PARTICLE_COUNT }, (_,i) => {
       const a = (i/PARTICLE_COUNT)*Math.PI*2, r = 10+Math.random()*40;
-      return { x: W/2+Math.cos(a)*r, y: H/2+Math.sin(a)*r, tx: W/2, ty: H/2, vx:0, vy:0, size:1+Math.random()*1.5 };
+      return { x: W/2+Math.cos(a)*r, y: H/2+Math.sin(a)*r, tx: W/2, ty: H/2, vx:0, vy:0, size:1+Math.random()*2.0 };
     });
 
     const onResize = () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; };
@@ -104,7 +146,7 @@ function useParticleCanvas(canvasOpacity: number) {
 
       const fade = opacityRef.current;
 
-      ctx.fillStyle = `rgba(0,0,0,${fade < 0.1 ? 1 : 0.18})`;
+      ctx.fillStyle = `rgba(0,0,0,${fade < 0.1 ? 1 : 0.15})`;
       ctx.fillRect(0, 0, W, H);
 
       for (let i = 0; i < PARTICLE_COUNT; i++) {
@@ -134,7 +176,8 @@ function useParticleCanvas(canvasOpacity: number) {
         const alpha = (0.7+Math.sin(t*2+i)*0.15) * fade;
         ctx.shadowColor = `rgb(${cr},${cg},${cb})`; ctx.shadowBlur = 6;
         ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha.toFixed(2)})`;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+        const drawSize = stateIndex === 1 ? 2.5 : p.size;
+        ctx.beginPath(); ctx.arc(p.x, p.y, drawSize, 0, Math.PI*2); ctx.fill();
       }
 
       ctx.shadowBlur = 0;
@@ -145,10 +188,18 @@ function useParticleCanvas(canvasOpacity: number) {
       ctx.fillText(label, W/2, H-18);
 
       if (stateIndex === 4 && !transitioning) {
-        const g = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, 40);
-        g.addColorStop(0, `rgba(255,255,255,${(0.12*fade).toFixed(2)})`);
-        g.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(W/2,H/2,40,0,Math.PI*2); ctx.fill();
+        // Dark void center
+        const void_ = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, 36);
+        void_.addColorStop(0, "rgba(0,0,0,0.95)");
+        void_.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = void_; ctx.beginPath(); ctx.arc(W/2, H/2, 36, 0, Math.PI*2); ctx.fill();
+        // Lens flare — bright white point offset to the left
+        const fx = W/2 - 120, fy = H/2 - 40;
+        const flare = ctx.createRadialGradient(fx, fy, 0, fx, fy, 18);
+        flare.addColorStop(0, `rgba(255,255,255,${(0.9*fade).toFixed(2)})`);
+        flare.addColorStop(0.3, `rgba(200,220,255,${(0.3*fade).toFixed(2)})`);
+        flare.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = flare; ctx.beginPath(); ctx.arc(fx, fy, 18, 0, Math.PI*2); ctx.fill();
       }
     }
 
@@ -201,15 +252,15 @@ export default function LoginPage() {
   };
 
   const glass: React.CSSProperties = {
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(50,100,200,0.2)",
     backdropFilter: "blur(20px)",
     WebkitBackdropFilter: "blur(20px)",
   };
 
   const inputStyle: React.CSSProperties = {
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(50,100,200,0.3)",
     borderRadius: 12,
     padding: "10px 16px",
     width: "100%",
@@ -228,7 +279,7 @@ export default function LoginPage() {
       <style>{`
         @keyframes bobbing{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
         input::placeholder{color:rgba(255,255,255,0.25);}
-        input:focus{border-color:#2dd4bf!important;box-shadow:0 0 0 2px rgba(45,212,191,0.2)!important;}
+        input:focus{border-color:rgba(100,180,255,1)!important;box-shadow:0 0 0 2px rgba(100,180,255,0.25)!important;}
       `}</style>
 
       {/* Canvas — full screen background */}
@@ -250,8 +301,7 @@ export default function LoginPage() {
               fontFamily: "var(--font-mono), monospace",
               fontSize: 11,
               letterSpacing: "3px",
-              color: "#2dd4bf",
-              opacity: 0.7,
+              color: "rgba(100,180,255,0.7)",
               marginBottom: 24,
               textTransform: "uppercase",
             }}>
@@ -285,11 +335,11 @@ export default function LoginPage() {
             {/* Stat cards side by side */}
             <div style={{ display: "flex", gap: 16 }}>
               <div style={{ ...glass, borderRadius: 16, padding: "16px 22px", display: "flex", flexDirection: "column", gap: 4, animation: "bobbing 4s ease-in-out infinite" }}>
-                <span style={{ fontSize: 26, fontWeight: 700, color: "#2dd4bf", fontFamily: "var(--font-space), sans-serif" }}>₹0</span>
+                <span style={{ fontSize: 26, fontWeight: 700, color: "rgba(100,200,255,1)", fontFamily: "var(--font-space), sans-serif" }}>₹0</span>
                 <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", letterSpacing: "0.5px" }}>Subscription cost</span>
               </div>
               <div style={{ ...glass, borderRadius: 16, padding: "16px 22px", display: "flex", flexDirection: "column", gap: 4, animation: "bobbing 4s ease-in-out infinite 1.8s" }}>
-                <span style={{ fontSize: 26, fontWeight: 700, color: "#2dd4bf", fontFamily: "var(--font-space), sans-serif" }}>100%</span>
+                <span style={{ fontSize: 26, fontWeight: 700, color: "rgba(100,200,255,1)", fontFamily: "var(--font-space), sans-serif" }}>100%</span>
                 <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", letterSpacing: "0.5px" }}>GST Compliant</span>
               </div>
             </div>
@@ -300,10 +350,10 @@ export default function LoginPage() {
         <div style={{
           width: 440,
           flexShrink: 0,
-          background: "rgba(0,0,0,0.6)",
+          background: "rgba(0,0,5,0.75)",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
-          borderLeft: "1px solid rgba(255,255,255,0.06)",
+          borderLeft: "1px solid rgba(50,100,200,0.15)",
           height: "100vh",
           display: "flex",
           alignItems: "center",
@@ -323,7 +373,7 @@ export default function LoginPage() {
               </span>
             </div>
 
-            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.2em", color: "#2dd4bf", fontFamily: "var(--font-mono), monospace", marginBottom: 14, textTransform: "uppercase" }}>
+            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.2em", color: "rgba(100,180,255,1)", fontFamily: "var(--font-mono), monospace", marginBottom: 14, textTransform: "uppercase" }}>
               Billing Studio
             </p>
             <h2 style={{ fontSize: 26, fontWeight: 700, color: "#fff", fontFamily: "var(--font-space), sans-serif", marginBottom: 6 }}>
