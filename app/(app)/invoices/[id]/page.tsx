@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { InvoiceDocument } from "@/components/invoices/invoice-document";
 import { InvoiceDetailControls } from "@/components/invoices/invoice-detail-controls";
+import { IrnSection } from "@/components/invoices/irn-section";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -61,6 +62,15 @@ export default async function InvoiceDetailPage({
           businessProfile={businessProfile}
         />
       </div>
+
+      {invoiceRecord.document_type === "gst_invoice" && (
+        <IrnSection
+          invoiceId={invoiceRecord.id}
+          initialIrn={invoiceRecord.irn ?? null}
+          initialAckNumber={invoiceRecord.ack_number ?? null}
+          initialAckDate={invoiceRecord.ack_date ?? null}
+        />
+      )}
 
       <Card className="no-print">
         <h3 className="text-lg font-semibold">Payment timeline</h3>

@@ -33,6 +33,7 @@ export function ProductForm({
       id: product?.id,
       item_name: product?.item_name ?? "",
       hsn_sac_code: product?.hsn_sac_code ?? "",
+      hsn_code: product?.hsn_code ?? "",
       default_gst_rate: product?.default_gst_rate ?? 18,
       unit: product?.unit ?? "Nos",
       rate: product?.rate ?? 0,
@@ -46,6 +47,7 @@ export function ProductForm({
       id: product?.id,
       item_name: product?.item_name ?? "",
       hsn_sac_code: product?.hsn_sac_code ?? "",
+      hsn_code: product?.hsn_code ?? "",
       default_gst_rate: product?.default_gst_rate ?? 18,
       unit: product?.unit ?? "Nos",
       rate: product?.rate ?? 0,
@@ -73,7 +75,10 @@ export function ProductForm({
           <Input {...form.register("item_name")} />
         </FormField>
         <FormField label="HSN / SAC code">
-          <Input {...form.register("hsn_sac_code")} />
+          <Input {...form.register("hsn_sac_code")} placeholder="e.g. 9983 or 8471" />
+        </FormField>
+        <FormField label="HSN code (GST)">
+          <Input {...form.register("hsn_code")} placeholder="8-digit HSN for e-invoice" />
         </FormField>
         <FormField label="Default GST %">
           <Select

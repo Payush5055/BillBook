@@ -127,7 +127,23 @@ export function InvoiceBuilder({
     router.push(isEditMode ? `/invoices/${existingInvoice!.id}` : "/dashboard");
   };
 
+  const validateGst = (values: FormValues): string | null => {
+    if (values.document_type !== "gst_invoice") return null;
+    const customer = customers.find((c) => c.id === values.customer_id);
+    if (!customer?.place_of_supply) {
+      return `Customer "${customer?.customer_name ?? ""}" is missing Place of Supply. Please update the customer record.`;
+    }
+    for (const item of values.items) {
+      if (!item.hsn_sac_code?.trim()) {
+        return `Item "${item.item_name || "unnamed"}" is missing HSN/SAC code. HSN is required for GST invoices.`;
+      }
+    }
+    return null;
+  };
+
   const onSubmit = (values: FormValues) => {
+    const gstError = validateGst(values);
+    if (gstError) { toast.error(gstError); return; }
     startTransition(async () => {
       try {
         if (isEditMode) {
@@ -146,6 +162,8 @@ export function InvoiceBuilder({
   };
 
   const createWithAction = (values: FormValues, action?: "download" | "print") => {
+    const gstError = validateGst(values);
+    if (gstError) { toast.error(gstError); return; }
     startTransition(async () => {
       try {
         if (isEditMode) {

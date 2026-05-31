@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import type { BusinessProfile, Customer, Invoice, InvoiceItem } from "@/lib/types";
 import { amountToWords, formatCurrency, formatDate } from "@/lib/utils";
 
@@ -14,6 +14,14 @@ type InvoiceDocumentProps = {
 
 export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
   ({ invoice, customer, items, businessProfile }, ref) => {
+    const [irnQrUrl, setIrnQrUrl] = useState("");
+    useEffect(() => {
+      if (!invoice.irn) return;
+      import("qrcode").then((QR) => {
+        QR.default.toDataURL(invoice.irn!, { width: 96, margin: 1 }).then(setIrnQrUrl).catch(() => {});
+      });
+    }, [invoice.irn]);
+
     return (
       <div ref={ref} className="mx-auto w-full max-w-[210mm] bg-white p-8 text-slate-900 shadow-2xl print:shadow-none">
         <div className="flex items-start justify-between gap-6 border-b border-slate-200 pb-6">
@@ -122,8 +130,20 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
             </div>
 
             <div className="mt-8 flex items-end justify-between gap-4">
-              <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-dashed border-slate-300 text-[10px] text-slate-500">
-                QR Placeholder
+              <div>
+                {invoice.irn && irnQrUrl ? (
+                  <div className="flex flex-col items-center gap-1">
+                    <img src={irnQrUrl} alt="e-Invoice QR" width={96} height={96} />
+                    <p className="text-[9px] text-slate-500">e-Invoice QR</p>
+                    {invoice.ack_number && (
+                      <p className="text-[9px] text-slate-500">Ack: {invoice.ack_number}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-dashed border-slate-300 text-[10px] text-slate-500">
+                    QR Code
+                  </div>
+                )}
               </div>
               <div className="text-right">
                 {businessProfile.signature_url ? (
@@ -132,6 +152,16 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
                 <p className="mt-2 text-sm font-medium">Authorised Signatory</p>
               </div>
             </div>
+            {invoice.irn && (
+              <div className="mt-4 border-t border-slate-200 pt-3">
+                <p className="text-[9px] text-slate-500 break-all">
+                  IRN: {invoice.irn}
+                </p>
+                {invoice.ack_date && (
+                  <p className="text-[9px] text-slate-500">Ack Date: {invoice.ack_date}</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

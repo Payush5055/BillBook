@@ -45,6 +45,7 @@ export type Database = {
           address: string;
           state: string;
           state_code: string;
+          place_of_supply: string | null;
           phone: string | null;
           email: string | null;
           notes: string | null;
@@ -67,6 +68,7 @@ export type Database = {
           user_id: string;
           item_name: string;
           hsn_sac_code: string | null;
+          hsn_code: string | null;
           default_gst_rate: number;
           unit: string;
           rate: number;
@@ -116,6 +118,10 @@ export type Database = {
           amount_paid: number;
           amount_due: number;
           amount_in_words: string;
+          irn: string | null;
+          ack_number: string | null;
+          ack_date: string | null;
+          irn_generated_at: string | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;

@@ -36,6 +36,7 @@ export function CustomerForm({
       address: customer?.address ?? "",
       state: customer?.state ?? "",
       state_code: customer?.state_code ?? "",
+      place_of_supply: customer?.place_of_supply ?? "Maharashtra",
       phone: customer?.phone ?? "",
       email: customer?.email ?? "",
       notes: customer?.notes ?? "",
@@ -50,6 +51,7 @@ export function CustomerForm({
       address: customer?.address ?? "",
       state: customer?.state ?? "",
       state_code: customer?.state_code ?? "",
+      place_of_supply: customer?.place_of_supply ?? "Maharashtra",
       phone: customer?.phone ?? "",
       email: customer?.email ?? "",
       notes: customer?.notes ?? "",
@@ -102,6 +104,15 @@ export function CustomerForm({
         </FormField>
         <FormField label="Email" error={form.formState.errors.email?.message}>
           <Input type="email" {...form.register("email")} />
+        </FormField>
+        <FormField label="Place of supply">
+          <Select
+            options={STATE_CODES.map((s) => ({ label: `${s.code} • ${s.name}`, value: s.name }))}
+            value={form.watch("place_of_supply") ?? "Maharashtra"}
+            onChange={(event) =>
+              form.setValue("place_of_supply", event.target.value, { shouldDirty: true })
+            }
+          />
         </FormField>
         <FormField label="Notes" className="md:col-span-2">
           <Textarea {...form.register("notes")} />
