@@ -136,12 +136,13 @@ export async function upsertProductAction(values: Record<string, unknown>) {
   const payload = productSchema.parse(values);
   const { supabase, user } = await getCurrentUserOrThrow();
 
+  const canonicalHsn = normalizeOptional(payload.hsn_code) ?? normalizeOptional(payload.hsn_sac_code);
   const data: Database["public"]["Tables"]["products"]["Insert"] = {
     id: payload.id,
     user_id: user.id,
     item_name: payload.item_name,
-    hsn_sac_code: normalizeOptional(payload.hsn_sac_code),
-    hsn_code: normalizeOptional(payload.hsn_code),
+    hsn_sac_code: canonicalHsn,
+    hsn_code: canonicalHsn,
     default_gst_rate: payload.default_gst_rate,
     unit: payload.unit,
     rate: payload.rate,

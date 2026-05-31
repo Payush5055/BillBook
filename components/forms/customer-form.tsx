@@ -88,14 +88,17 @@ export function CustomerForm({
         <FormField label="State code">
           <Select
             options={STATE_CODES.map((state) => ({
-              label: `${state.code} • ${state.name}`,
+              label: `${state.name} (Code: ${state.code})`,
               value: state.code,
             }))}
             value={form.watch("state_code")}
             onChange={(event) => {
               const selected = STATE_CODES.find((state) => state.code === event.target.value);
               form.setValue("state_code", event.target.value, { shouldDirty: true });
-              if (selected) form.setValue("state", selected.name, { shouldDirty: true });
+              if (selected) {
+                form.setValue("state", selected.name, { shouldDirty: true });
+                form.setValue("place_of_supply", selected.name, { shouldDirty: true });
+              }
             }}
           />
         </FormField>
@@ -105,9 +108,12 @@ export function CustomerForm({
         <FormField label="Email" error={form.formState.errors.email?.message}>
           <Input type="email" {...form.register("email")} />
         </FormField>
-        <FormField label="Place of supply">
+        <FormField label="Place of Supply (State)">
           <Select
-            options={STATE_CODES.map((s) => ({ label: `${s.code} • ${s.name}`, value: s.name }))}
+            options={STATE_CODES.map((s) => ({
+              label: `${s.name} (Code: ${s.code})`,
+              value: s.name,
+            }))}
             value={form.watch("place_of_supply") ?? "Maharashtra"}
             onChange={(event) =>
               form.setValue("place_of_supply", event.target.value, { shouldDirty: true })

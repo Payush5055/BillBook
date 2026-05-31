@@ -18,12 +18,15 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
     useEffect(() => {
       if (!invoice.irn) return;
       import("qrcode").then((QR) => {
-        QR.default.toDataURL(invoice.irn!, { width: 96, margin: 1 }).then(setIrnQrUrl).catch(() => {});
+        QR.default.toDataURL(invoice.irn!, { width: 120, margin: 1 }).then(setIrnQrUrl).catch(() => {});
       });
     }, [invoice.irn]);
 
+    const isGst = invoice.document_type === "gst_invoice";
+
     return (
       <div ref={ref} className="mx-auto w-full max-w-[210mm] bg-white p-8 text-slate-900 shadow-2xl print:shadow-none">
+        {/* Header */}
         <div className="flex items-start justify-between gap-6 border-b border-slate-200 pb-6">
           <div className="space-y-3">
             {businessProfile.logo_url ? (
@@ -53,6 +56,7 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
           </div>
         </div>
 
+        {/* Bill To + Payment Details */}
         <div className="grid gap-8 border-b border-slate-200 py-6 md:grid-cols-2">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Bill to</p>
@@ -61,6 +65,11 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
             <p className="mt-2 text-sm text-slate-600">
               GSTIN: {customer.gstin || "N/A"} | State Code: {customer.state_code}
             </p>
+            {customer.place_of_supply && (
+              <p className="mt-1 text-sm text-slate-600">
+                Place of Supply: {customer.place_of_supply}
+              </p>
+            )}
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Payment details</p>
@@ -73,10 +82,12 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
           </div>
         </div>
 
+        {/* Line Items Table */}
         <table className="mt-6 w-full border-collapse text-sm">
           <thead>
             <tr className="border-y border-slate-200 text-left text-slate-500">
               <th className="py-3 pr-4">Item</th>
+              {isGst && <th className="py-3 pr-4 w-20">HSN/SAC</th>}
               <th className="py-3 pr-4">Qty</th>
               <th className="py-3 pr-4">Rate</th>
               <th className="py-3 pr-4">GST</th>
@@ -90,6 +101,11 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
                   <p className="font-medium text-slate-900">{item.item_name}</p>
                   {item.description ? <p className="mt-1 text-xs text-slate-500">{item.description}</p> : null}
                 </td>
+                {isGst && (
+                  <td className="py-4 pr-4 text-slate-600 text-xs font-mono">
+                    {item.hsn_sac_code || "-"}
+                  </td>
+                )}
                 <td className="py-4 pr-4 text-slate-600">
                   {item.quantity} {item.unit}
                 </td>
@@ -101,6 +117,7 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
           </tbody>
         </table>
 
+        {/* Totals + Signature */}
         <div className="mt-8 grid gap-8 md:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-4">
             <div className="rounded-2xl border border-slate-200 p-4">
@@ -129,22 +146,34 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
               <Row label="Balance due" value={invoice.amount_due} strong />
             </div>
 
-            <div className="mt-8 flex items-end justify-between gap-4">
-              <div>
-                {invoice.irn && irnQrUrl ? (
+            {/* IRN + QR section — only when IRN is set */}
+            {isGst && invoice.irn ? (
+              <div className="mt-6 grid grid-cols-[1fr_auto] gap-4 border-t border-slate-200 pt-4">
+                <div className="space-y-1">
+                  <p style={{ fontSize: "7px", fontFamily: "monospace", wordBreak: "break-all" }} className="text-slate-700">
+                    <span className="font-semibold">IRN:</span> {invoice.irn}
+                  </p>
+                  {invoice.ack_number && (
+                    <p style={{ fontSize: "7px" }} className="text-slate-700">
+                      <span className="font-semibold">Ack No:</span> {invoice.ack_number}
+                    </p>
+                  )}
+                  {invoice.ack_date && (
+                    <p style={{ fontSize: "7px" }} className="text-slate-700">
+                      <span className="font-semibold">Ack Date:</span> {invoice.ack_date}
+                    </p>
+                  )}
+                </div>
+                {irnQrUrl && (
                   <div className="flex flex-col items-center gap-1">
-                    <img src={irnQrUrl} alt="e-Invoice QR" width={96} height={96} />
-                    <p className="text-[9px] text-slate-500">e-Invoice QR</p>
-                    {invoice.ack_number && (
-                      <p className="text-[9px] text-slate-500">Ack: {invoice.ack_number}</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-dashed border-slate-300 text-[10px] text-slate-500">
-                    QR Code
+                    <img src={irnQrUrl} alt="e-Invoice QR" width={120} height={120} />
+                    <p className="text-[9px] text-slate-500">Scan to verify</p>
                   </div>
                 )}
               </div>
+            ) : null}
+
+            <div className="mt-6 flex items-end justify-end">
               <div className="text-right">
                 {businessProfile.signature_url ? (
                   <Image src={businessProfile.signature_url} alt="Signature" width={120} height={48} className="ml-auto h-12 w-28 object-contain" />
@@ -152,16 +181,6 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
                 <p className="mt-2 text-sm font-medium">Authorised Signatory</p>
               </div>
             </div>
-            {invoice.irn && (
-              <div className="mt-4 border-t border-slate-200 pt-3">
-                <p className="text-[9px] text-slate-500 break-all">
-                  IRN: {invoice.irn}
-                </p>
-                {invoice.ack_date && (
-                  <p className="text-[9px] text-slate-500">Ack Date: {invoice.ack_date}</p>
-                )}
-              </div>
-            )}
           </div>
         </div>
       </div>

@@ -10,12 +10,18 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { GST_OPTIONS } from "@/lib/constants";
+import { GST_OPTIONS, UNIT_OPTIONS } from "@/lib/constants";
 import { upsertProductAction } from "@/lib/actions";
 import type { Product } from "@/lib/types";
 import { productSchema } from "@/lib/validations";
 
 type FormValues = z.infer<typeof productSchema>;
+
+function resolveUnit(unit: string | undefined | null): string {
+  if (!unit) return "NOS";
+  const match = UNIT_OPTIONS.find((o) => o.value === unit.toUpperCase());
+  return match ? match.value : "OTH";
+}
 
 export function ProductForm({
   product,
@@ -35,7 +41,7 @@ export function ProductForm({
       hsn_sac_code: product?.hsn_sac_code ?? "",
       hsn_code: product?.hsn_code ?? "",
       default_gst_rate: product?.default_gst_rate ?? 18,
-      unit: product?.unit ?? "Nos",
+      unit: resolveUnit(product?.unit),
       rate: product?.rate ?? 0,
       description: product?.description ?? "",
       item_type: product?.item_type ?? "service",
@@ -49,7 +55,7 @@ export function ProductForm({
       hsn_sac_code: product?.hsn_sac_code ?? "",
       hsn_code: product?.hsn_code ?? "",
       default_gst_rate: product?.default_gst_rate ?? 18,
-      unit: product?.unit ?? "Nos",
+      unit: resolveUnit(product?.unit),
       rate: product?.rate ?? 0,
       description: product?.description ?? "",
       item_type: product?.item_type ?? "service",
@@ -74,12 +80,20 @@ export function ProductForm({
         <FormField label="Item name" error={form.formState.errors.item_name?.message}>
           <Input {...form.register("item_name")} />
         </FormField>
-        <FormField label="HSN / SAC code">
-          <Input {...form.register("hsn_sac_code")} placeholder="e.g. 9983 or 8471" />
-        </FormField>
-        <FormField label="HSN code (GST)">
-          <Input {...form.register("hsn_code")} placeholder="8-digit HSN for e-invoice" />
-        </FormField>
+
+        <div className="space-y-2">
+          <FormField label="HSN / SAC Code">
+            <Input
+              {...form.register("hsn_code", { maxLength: 8 })}
+              placeholder="e.g. 27101900"
+              maxLength={8}
+            />
+          </FormField>
+          <p className="text-xs text-muted-foreground">
+            Required for GST invoices uploaded to government portal
+          </p>
+        </div>
+
         <FormField label="Default GST %">
           <Select
             options={GST_OPTIONS.map((value) => ({ label: `${value}%`, value: String(value) }))}
@@ -89,12 +103,21 @@ export function ProductForm({
             }
           />
         </FormField>
+
         <FormField label="Unit">
-          <Input {...form.register("unit")} placeholder="Nos / Hrs / Pcs" />
+          <Select
+            options={UNIT_OPTIONS.map((o) => ({ label: o.label, value: o.value }))}
+            value={form.watch("unit")}
+            onChange={(event) =>
+              form.setValue("unit", event.target.value, { shouldDirty: true })
+            }
+          />
         </FormField>
+
         <FormField label="Rate">
           <Input type="number" step="0.01" {...form.register("rate", { valueAsNumber: true })} />
         </FormField>
+
         <FormField label="Goods / service">
           <Select
             options={[
@@ -109,10 +132,12 @@ export function ProductForm({
             }
           />
         </FormField>
+
         <FormField label="Description" className="md:col-span-2">
           <Textarea {...form.register("description")} />
         </FormField>
       </div>
+
       <div className="flex gap-3">
         <Button type="submit" className="flex-1" disabled={pending}>
           {pending ? "Saving..." : product ? "Update item" : "Create item"}

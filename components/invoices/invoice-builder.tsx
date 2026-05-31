@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "framer-motion";
@@ -56,7 +56,7 @@ function buildDefaultValues(
             discount_percent: Number(item.discount_percent),
             discount_amount: Number(item.discount_amount),
           }))
-        : [{ item_name: "", description: "", hsn_sac_code: "", quantity: 1, unit: "Nos", rate: 0, gst_rate: 18, discount_percent: 0, discount_amount: 0 }],
+        : [{ item_name: "", description: "", hsn_sac_code: "", quantity: 1, unit: "NOS", rate: 0, gst_rate: 18, discount_percent: 0, discount_amount: 0 }],
     };
   }
 
@@ -73,7 +73,7 @@ function buildDefaultValues(
     mode: "publish",
     source_invoice_id: null,
     items: [
-      { item_name: "", description: "", hsn_sac_code: "", quantity: 1, unit: "Nos", rate: 0, gst_rate: 18, discount_percent: 0, discount_amount: 0 },
+      { item_name: "", description: "", hsn_sac_code: "", quantity: 1, unit: "NOS", rate: 0, gst_rate: 18, discount_percent: 0, discount_amount: 0 },
     ],
   };
 }
@@ -92,6 +92,8 @@ export function InvoiceBuilder({
   const router = useRouter();
   const isEditMode = !!existingInvoice;
   const [pending, startTransition] = useTransition();
+  const [invalidHsnIndexes, setInvalidHsnIndexes] = useState<Set<number>>(new Set());
+
   const form = useForm<FormValues>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: buildDefaultValues(customers, existingInvoice),
@@ -128,16 +130,26 @@ export function InvoiceBuilder({
   };
 
   const validateGst = (values: FormValues): string | null => {
-    if (values.document_type !== "gst_invoice") return null;
+    if (values.document_type !== "gst_invoice") {
+      setInvalidHsnIndexes(new Set());
+      return null;
+    }
     const customer = customers.find((c) => c.id === values.customer_id);
     if (!customer?.place_of_supply) {
-      return `Customer "${customer?.customer_name ?? ""}" is missing Place of Supply. Please update the customer record.`;
+      return `Cannot create GST invoice: Customer '${customer?.customer_name ?? ""}' is missing Place of Supply. Please update the customer first.`;
     }
-    for (const item of values.items) {
-      if (!item.hsn_sac_code?.trim()) {
-        return `Item "${item.item_name || "unnamed"}" is missing HSN/SAC code. HSN is required for GST invoices.`;
+    const badIndexes = new Set<number>();
+    for (let i = 0; i < values.items.length; i++) {
+      if (!values.items[i].hsn_sac_code?.trim()) {
+        badIndexes.add(i);
       }
     }
+    if (badIndexes.size > 0) {
+      setInvalidHsnIndexes(badIndexes);
+      const firstBad = values.items[badIndexes.values().next().value!];
+      return `Cannot create GST invoice: '${firstBad.item_name || "unnamed item"}' is missing HSN/SAC code. Please update the product first.`;
+    }
+    setInvalidHsnIndexes(new Set());
     return null;
   };
 
@@ -244,7 +256,7 @@ export function InvoiceBuilder({
                     description: "",
                     hsn_sac_code: "",
                     quantity: 1,
-                    unit: "Nos",
+                    unit: "NOS",
                     rate: 0,
                     gst_rate: 18,
                     discount_percent: 0,
@@ -265,7 +277,11 @@ export function InvoiceBuilder({
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -12 }}
-                    className="rounded-[26px] border border-white/10 bg-white/[0.03] p-4"
+                    className={`rounded-[26px] border bg-white/[0.03] p-4 transition-colors ${
+                      invalidHsnIndexes.has(index)
+                        ? "border-red-500"
+                        : "border-white/10"
+                    }`}
                   >
                     {/* Row 1: Preset item | Item name | HSN/SAC | Trash */}
                     <div className="mb-3 flex items-end gap-3">
@@ -282,10 +298,15 @@ export function InvoiceBuilder({
                             form.setValue(`items.${index}.product_id`, selected.id);
                             form.setValue(`items.${index}.item_name`, selected.item_name);
                             form.setValue(`items.${index}.description`, selected.description ?? "");
-                            form.setValue(`items.${index}.hsn_sac_code`, selected.hsn_sac_code ?? "");
+                            form.setValue(`items.${index}.hsn_sac_code`, selected.hsn_code ?? selected.hsn_sac_code ?? "");
                             form.setValue(`items.${index}.rate`, selected.rate);
                             form.setValue(`items.${index}.unit`, selected.unit);
                             form.setValue(`items.${index}.gst_rate`, Number(selected.default_gst_rate));
+                            setInvalidHsnIndexes((prev) => {
+                              const next = new Set(prev);
+                              next.delete(index);
+                              return next;
+                            });
                           }}
                         />
                       </FormField>
@@ -293,7 +314,19 @@ export function InvoiceBuilder({
                         <Input className="h-9" placeholder="Goods / service description" {...form.register(`items.${index}.item_name`)} />
                       </FormField>
                       <FormField label="HSN / SAC" className="w-28 flex-none">
-                        <Input className="h-9" placeholder="e.g. 9983" {...form.register(`items.${index}.hsn_sac_code`)} />
+                        <Input
+                          className="h-9"
+                          placeholder="e.g. 9983"
+                          {...form.register(`items.${index}.hsn_sac_code`, {
+                            onChange: () => {
+                              setInvalidHsnIndexes((prev) => {
+                                const next = new Set(prev);
+                                next.delete(index);
+                                return next;
+                              });
+                            },
+                          })}
+                        />
                       </FormField>
                       <button
                         type="button"
@@ -306,10 +339,16 @@ export function InvoiceBuilder({
                       </button>
                     </div>
 
+                    {invalidHsnIndexes.has(index) && (
+                      <p className="mb-2 text-xs text-red-400">
+                        HSN/SAC code is required for GST invoices.
+                      </p>
+                    )}
+
                     {/* Row 2: Unit | Qty | Rate | GST % */}
                     <div className="mb-3 grid grid-cols-4 gap-3">
                       <FormField label="Unit">
-                        <Input className="h-9" placeholder="Nos" {...form.register(`items.${index}.unit`)} />
+                        <Input className="h-9" placeholder="NOS" {...form.register(`items.${index}.unit`)} />
                       </FormField>
                       <FormField label="Qty">
                         <Input className="h-9" type="number" step={1} min={0} {...form.register(`items.${index}.quantity`, { valueAsNumber: true })} />
@@ -325,11 +364,9 @@ export function InvoiceBuilder({
                             form.setValue(`items.${index}.gst_rate`, Number(e.target.value))
                           }
                         >
-                          <option value={0}>0%</option>
-                          <option value={5}>5%</option>
-                          <option value={12}>12%</option>
-                          <option value={18}>18%</option>
-                          <option value={28}>28%</option>
+                          {GST_OPTIONS.map((v) => (
+                            <option key={v} value={v}>{v}%</option>
+                          ))}
                         </select>
                       </FormField>
                     </div>

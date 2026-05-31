@@ -1,5 +1,20 @@
 export const APP_NAME = "BillBook";
 
+export const UNIT_OPTIONS = [
+  { value: "NOS", label: "Nos (Numbers)" },
+  { value: "KGS", label: "Kgs (Kilograms)" },
+  { value: "LTR", label: "Ltr (Litres)" },
+  { value: "MTR", label: "Mtr (Metres)" },
+  { value: "SQF", label: "Sq. Ft" },
+  { value: "SQM", label: "Sq. Mtr" },
+  { value: "TON", label: "Tonnes" },
+  { value: "PKT", label: "Packets" },
+  { value: "BOX", label: "Box" },
+  { value: "SET", label: "Set" },
+  { value: "PRS", label: "Pairs" },
+  { value: "OTH", label: "Others" },
+] as const;
+
 export const DOCUMENT_TYPES = [
   { label: "GST Invoice", value: "gst_invoice" },
   { label: "Non-GST Invoice", value: "non_gst_invoice" },
