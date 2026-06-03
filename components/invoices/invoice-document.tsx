@@ -30,7 +30,28 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
     const declarationText = invoice.declaration_text || (isGst ? DEFAULT_DECLARATION : null);
     const showReceiverSig = invoice.show_receiver_signature !== false;
 
-    // Reference fields — only show non-empty ones
+    // Business details: use invoice snapshot (set at creation) if available,
+    // otherwise fall back to the current business_profile (legacy invoices).
+    const bizName = invoice.business_name || businessProfile.business_name;
+    const bizAddress = invoice.business_address || businessProfile.address;
+    const bizCity = invoice.business_city ?? null;
+    const bizState = invoice.business_state || businessProfile.state;
+    const bizPincode = invoice.business_pincode ?? null;
+    const bizGstin = invoice.business_gstin || businessProfile.gstin;
+    const bizStateCode = invoice.business_state_code
+      ? String(invoice.business_state_code)
+      : businessProfile.state_code;
+    const bizPhone = invoice.business_phone || businessProfile.phone;
+    const bizEmail = invoice.business_email || businessProfile.email;
+    const bizBankName = invoice.business_bank_name || businessProfile.bank_name;
+    const bizBankAccount = invoice.business_bank_account || businessProfile.bank_account_number;
+    const bizBankIfsc = invoice.business_bank_ifsc || businessProfile.bank_ifsc;
+
+    // Build a full address line for display
+    const addressParts = [bizAddress, bizCity, bizState, bizPincode].filter(Boolean);
+    const bizFullAddress = addressParts.join(", ");
+
+    // Reference fields — only show non-empty ones, eway bill listed first
     const refFields: { label: string; value: string | null | undefined }[] = [
       { label: "e-Way Bill No", value: invoice.eway_bill_no },
       { label: "Supplier's Ref", value: invoice.suppliers_ref },
@@ -60,26 +81,24 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
       >
         {/* ===== HEADER ===== */}
         <div className="flex items-start justify-between gap-6 border-b-2 border-slate-800 pb-5">
-          <div className="space-y-2">
+          <div className="space-y-1">
             {businessProfile.logo_url && (
               <Image
                 src={businessProfile.logo_url}
-                alt={businessProfile.business_name}
+                alt={bizName}
                 width={76}
                 height={76}
-                className="h-16 w-16 rounded-2xl object-cover"
+                className="mb-2 h-16 w-16 rounded-2xl object-cover"
               />
             )}
-            <h1 className="text-2xl font-bold leading-tight">{businessProfile.business_name}</h1>
-            <p className="max-w-xs text-sm leading-5 text-slate-600">{businessProfile.address}</p>
-            {businessProfile.phone && (
-              <p className="text-sm text-slate-600">Ph: {businessProfile.phone}</p>
-            )}
-            {businessProfile.email && (
-              <p className="text-sm text-slate-600">Email: {businessProfile.email}</p>
-            )}
-            {businessProfile.gstin && (
-              <p className="text-sm font-medium">GSTIN: {businessProfile.gstin} | State Code: {businessProfile.state_code}</p>
+            <h1 className="text-2xl font-bold leading-tight">{bizName}</h1>
+            <p className="max-w-xs text-sm leading-5 text-slate-600">{bizFullAddress}</p>
+            {bizPhone && <p className="text-sm text-slate-600">Ph: {bizPhone}</p>}
+            {bizEmail && <p className="text-sm text-slate-600">Email: {bizEmail}</p>}
+            {bizGstin && (
+              <p className="text-sm font-medium">
+                GSTIN: {bizGstin} | State Code: {bizStateCode}
+              </p>
             )}
           </div>
           <div className="space-y-2 text-right">
@@ -87,7 +106,7 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
               {invoice.document_type.replaceAll("_", " ")}
             </p>
             <h2 className="text-3xl font-bold">{invoice.invoice_number}</h2>
-            <div className="text-sm text-slate-600 space-y-1">
+            <div className="space-y-1 text-sm text-slate-600">
               <p>Issue: <span className="font-medium">{formatDate(invoice.issue_date)}</span></p>
               <p>Due: <span className="font-medium">{invoice.due_date ? formatDate(invoice.due_date) : "On receipt"}</span></p>
             </div>
@@ -100,13 +119,13 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
           </div>
         </div>
 
-        {/* ===== REFERENCE FIELDS ===== */}
+        {/* ===== REFERENCE FIELDS (includes e-Way Bill) ===== */}
         {refFields.length > 0 && (
           <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
             <div className="grid grid-cols-2 gap-x-8 gap-y-1 md:grid-cols-3">
               {refFields.map((f) => (
                 <div key={f.label} className="flex gap-1 text-xs">
-                  <span className="font-semibold text-slate-500">{f.label}:</span>
+                  <span className="font-semibold text-slate-500 whitespace-nowrap">{f.label}:</span>
                   <span className="text-slate-700">{f.value}</span>
                 </div>
               ))}
@@ -154,9 +173,9 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-400">Payment Details</p>
               <div className="mt-2 space-y-1 text-sm text-slate-600">
-                <p>Bank: <span className="font-medium">{businessProfile.bank_name || "—"}</span></p>
-                <p>Account: <span className="font-medium">{businessProfile.bank_account_number || "—"}</span></p>
-                <p>IFSC: <span className="font-medium">{businessProfile.bank_ifsc || "—"}</span></p>
+                <p>Bank: <span className="font-medium">{bizBankName || "—"}</span></p>
+                <p>Account: <span className="font-medium">{bizBankAccount || "—"}</span></p>
+                <p>IFSC: <span className="font-medium">{bizBankIfsc || "—"}</span></p>
                 {businessProfile.upi_id && (
                   <p>UPI: <span className="font-medium">{businessProfile.upi_id}</span></p>
                 )}
@@ -213,7 +232,6 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
         {/* ===== TOTALS + SIGNATURES ===== */}
         <div className="mt-6 grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-4">
-            {/* Amount in words */}
             <div className="rounded-xl border border-slate-200 p-4">
               <p className="text-xs font-bold uppercase tracking-[0.25em] text-slate-400">Amount in Words</p>
               <p className="mt-2 text-sm italic leading-5 text-slate-700">
@@ -221,14 +239,14 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
               </p>
             </div>
 
-            {/* Bank details (only when consignee shown above) */}
+            {/* Bank details (only when consignee shown above takes the right column) */}
             {hasConsignee && (
               <div className="rounded-xl border border-slate-200 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.25em] text-slate-400">Payment Details</p>
                 <div className="mt-2 space-y-1 text-sm text-slate-600">
-                  <p>Bank: <span className="font-medium">{businessProfile.bank_name || "—"}</span></p>
-                  <p>Account: <span className="font-medium">{businessProfile.bank_account_number || "—"}</span></p>
-                  <p>IFSC: <span className="font-medium">{businessProfile.bank_ifsc || "—"}</span></p>
+                  <p>Bank: <span className="font-medium">{bizBankName || "—"}</span></p>
+                  <p>Account: <span className="font-medium">{bizBankAccount || "—"}</span></p>
+                  <p>IFSC: <span className="font-medium">{bizBankIfsc || "—"}</span></p>
                   {businessProfile.upi_id && (
                     <p>UPI: <span className="font-medium">{businessProfile.upi_id}</span></p>
                   )}
@@ -236,7 +254,6 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
               </div>
             )}
 
-            {/* Declaration */}
             {declarationText && (
               <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.25em] text-slate-400">Declaration</p>
@@ -244,7 +261,6 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
               </div>
             )}
 
-            {/* Terms */}
             {businessProfile.terms_and_conditions && (
               <div className="rounded-xl border border-slate-200 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.25em] text-slate-400">Terms &amp; Conditions</p>
@@ -255,7 +271,6 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
             )}
           </div>
 
-          {/* Right: amounts + signature */}
           <div className="rounded-xl border border-slate-200 p-4">
             <div className="space-y-2 text-sm">
               <TRow label="Subtotal" value={invoice.subtotal} />
@@ -283,7 +298,6 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
               />
             </div>
 
-            {/* IRN + QR */}
             {isGst && invoice.irn ? (
               <div className="mt-4 grid grid-cols-[1fr_auto] gap-3 border-t border-slate-200 pt-4">
                 <div className="space-y-1">
@@ -310,7 +324,6 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
               </div>
             ) : null}
 
-            {/* Signature row */}
             <div className="mt-6 flex items-end justify-between">
               {showReceiverSig && (
                 <div className="text-center">
@@ -330,7 +343,7 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
                 ) : (
                   <div className="h-10 w-28 border-b border-dashed border-slate-300" />
                 )}
-                <p className="mt-1 text-xs text-slate-500">{businessProfile.business_name}</p>
+                <p className="mt-1 text-xs text-slate-500">{bizName}</p>
                 <p className="text-xs font-medium text-slate-700">Authorised Signatory</p>
               </div>
             </div>

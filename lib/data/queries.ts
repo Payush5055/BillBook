@@ -138,16 +138,7 @@ export async function getInvoiceById(
   const supabase = await createClient();
   const { data: invoice } = await supabase
     .from("invoices")
-    .select(`
-      *,
-      eway_bill_no, suppliers_ref, other_ref,
-      buyer_order_no, buyer_order_date,
-      dispatch_doc_no, dispatch_date,
-      dispatch_through, destination,
-      consignee_name, consignee_address, consignee_gstin, consignee_state_code,
-      declaration_text, show_receiver_signature,
-      customers(*), invoice_items(*), payments(*)
-    `)
+    .select("*, customers(*), invoice_items(*), payments(*)")
     .eq("user_id", userId)
     .eq("id", invoiceId)
     .is("deleted_at", null)

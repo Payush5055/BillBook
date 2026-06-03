@@ -152,7 +152,6 @@ export type Database = {
           ack_number: string | null;
           ack_date: string | null;
           irn_generated_at: string | null;
-          // New fields (Task 3)
           eway_bill_no: string | null;
           suppliers_ref: string | null;
           other_ref: string | null;
@@ -168,6 +167,20 @@ export type Database = {
           consignee_state_code: number | null;
           declaration_text: string | null;
           show_receiver_signature: boolean;
+          // Business snapshot at invoice creation time
+          business_name: string | null;
+          business_address: string | null;
+          business_city: string | null;
+          business_state: string | null;
+          business_pincode: string | null;
+          business_gstin: string | null;
+          business_state_code: number | null;
+          business_phone: string | null;
+          business_email: string | null;
+          business_website: string | null;
+          business_bank_name: string | null;
+          business_bank_account: string | null;
+          business_bank_ifsc: string | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -290,23 +303,20 @@ export type Database = {
     };
     Functions: {
       create_invoice_with_items: {
-        Args: {
-          payload: Json;
-        };
+        Args: { payload: Json };
         Returns: string;
       };
       duplicate_invoice_document: {
-        Args: {
-          source_invoice_id: string;
-          target_document_type: string;
-        };
+        Args: { source_invoice_id: string; target_document_type: string };
         Returns: string;
       };
       record_invoice_payment: {
-        Args: {
-          payload: Json;
-        };
+        Args: { payload: Json };
         Returns: string;
+      };
+      increment_business_invoice_counter: {
+        Args: { p_business_id: string; p_user_id: string };
+        Returns: number;
       };
     };
   };

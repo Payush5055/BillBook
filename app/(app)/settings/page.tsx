@@ -5,7 +5,7 @@ import { BusinessSwitcher } from "@/components/settings/business-switcher";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getBusinessProfile, getBusinesses, getSessionUser } from "@/lib/data/queries";
+import { getBusinesses, getBusinessProfile, getSessionUser } from "@/lib/data/queries";
 
 export default async function SettingsPage() {
   const user = await getSessionUser();
@@ -19,7 +19,7 @@ export default async function SettingsPage() {
       <PageHeader
         eyebrow="Settings"
         title="Business configuration"
-        description="Manage your businesses, GST identity, invoice prefix, bank details, and financial year locks."
+        description="Manage your businesses, GST identity, bank details, and financial year locks."
         action={
           <Button asChild variant="secondary">
             <Link href="/api/export" target="_blank">
@@ -29,16 +29,16 @@ export default async function SettingsPage() {
         }
       />
 
-      {/* Multi-business switcher */}
+      {/* Business management — view list + add new (switching is in the navbar) */}
       <Card>
         <BusinessSwitcher businesses={businesses} />
       </Card>
 
-      {/* Legacy business profile form */}
+      {/* Legacy business profile — logo, signature, terms, financial year lock */}
       <div>
-        <h2 className="mb-4 text-lg font-semibold">Default Business Profile</h2>
+        <h2 className="mb-1 text-lg font-semibold">Invoice Assets &amp; Locks</h2>
         <p className="mb-4 text-sm text-muted-foreground">
-          Used for invoice PDF assets (logo, signature) and financial year lock.
+          Logo, authorised signature, terms &amp; conditions, and financial year lock apply to all invoice PDFs.
         </p>
         <Card>
           <BusinessProfileForm profile={profile} userId={user.id} />

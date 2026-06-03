@@ -67,20 +67,18 @@ export async function signOutAction() {
 
 export async function setActiveBusinessAction(businessId: string) {
   const { supabase, user } = await getCurrentUserOrThrow();
-  // Deactivate all
   await supabase
     .from("businesses")
     .update({ is_active: false } as never)
     .eq("user_id", user.id);
-  // Activate selected
   const { error } = await supabase
     .from("businesses")
     .update({ is_active: true } as never)
     .eq("id", businessId)
     .eq("user_id", user.id);
   if (error) throw new Error(error.message);
-  revalidatePath("/settings");
-  revalidatePath("/dashboard");
+  // Revalidate entire layout so navbar + all pages reflect new active business
+  revalidatePath("/", "layout");
 }
 
 export async function createBusinessAction(values: Record<string, unknown>) {
@@ -283,8 +281,13 @@ export async function createInvoiceAction(values: Record<string, unknown>) {
   let sequenceNumber: number;
 
   if (activeBusiness) {
-    // Use per-business invoice series
-    const newCounter = (activeBusiness.invoice_counter ?? 0) + 1;
+    // Atomically increment counter via dedicated RPC to avoid race conditions
+    const { data: newCounterData, error: counterError } = await (supabase.rpc as any)(
+      "increment_business_invoice_counter",
+      { p_business_id: activeBusiness.id, p_user_id: user.id },
+    );
+    if (counterError) throw new Error(counterError.message);
+    const newCounter = newCounterData as number;
     invoiceNumber = formatInvoiceNumber(
       activeBusiness.invoice_format,
       activeBusiness.invoice_series,
@@ -292,14 +295,8 @@ export async function createInvoiceAction(values: Record<string, unknown>) {
       payload.issue_date,
     );
     sequenceNumber = newCounter;
-    // Increment counter in businesses table
-    await supabase
-      .from("businesses")
-      .update({ invoice_counter: newCounter } as never)
-      .eq("id", activeBusiness.id)
-      .eq("user_id", user.id);
   } else {
-    // Fallback: legacy sequence
+    // Fallback: legacy per-FY sequence
     const { data: existingSequenceData } = await supabase
       .from("invoices")
       .select("sequence_number")
@@ -320,6 +317,7 @@ export async function createInvoiceAction(values: Record<string, unknown>) {
       ? "draft"
       : resolveInvoiceStatus(totals.grandTotal, payload.amount_paid);
 
+  // Core RPC payload — only fields the existing RPC knows about
   const rpcPayload = {
     user_id: user.id,
     customer_id: payload.customer_id,
@@ -348,6 +346,19 @@ export async function createInvoiceAction(values: Record<string, unknown>) {
     amount_paid: payload.amount_paid,
     amount_due: totals.amountDue,
     amount_in_words: totals.amountInWords,
+    items: totals.items,
+  };
+
+  const { data, error } = await (supabase.rpc as any)("create_invoice_with_items", {
+    payload: rpcPayload,
+  });
+
+  if (error) throw new Error(error.message);
+  const invoiceId = data as string;
+
+  // Post-create UPDATE: store extended fields + active business snapshot
+  // (these columns were added after the RPC was created)
+  const extendedFields: Record<string, unknown> = {
     eway_bill_no: normalizeOptional(payload.eway_bill_no),
     suppliers_ref: normalizeOptional(payload.suppliers_ref),
     other_ref: normalizeOptional(payload.other_ref),
@@ -363,21 +374,36 @@ export async function createInvoiceAction(values: Record<string, unknown>) {
     consignee_state_code: payload.consignee_state_code ?? null,
     declaration_text: normalizeOptional(payload.declaration_text),
     show_receiver_signature: payload.show_receiver_signature ?? true,
-    items: totals.items,
   };
 
-  const { data, error } = await (supabase.rpc as any)("create_invoice_with_items", {
-    payload: rpcPayload,
-  });
+  if (activeBusiness) {
+    extendedFields.business_name = activeBusiness.name;
+    extendedFields.business_address = activeBusiness.address ?? null;
+    extendedFields.business_city = activeBusiness.city ?? null;
+    extendedFields.business_state = activeBusiness.state ?? null;
+    extendedFields.business_pincode = activeBusiness.pincode ?? null;
+    extendedFields.business_gstin = activeBusiness.gstin ?? null;
+    extendedFields.business_state_code = activeBusiness.state_code ?? null;
+    extendedFields.business_phone = activeBusiness.phone ?? null;
+    extendedFields.business_email = activeBusiness.email ?? null;
+    extendedFields.business_website = activeBusiness.website ?? null;
+    extendedFields.business_bank_name = activeBusiness.bank_name ?? null;
+    extendedFields.business_bank_account = activeBusiness.bank_account ?? null;
+    extendedFields.business_bank_ifsc = activeBusiness.bank_ifsc ?? null;
+  }
 
-  if (error) throw new Error(error.message);
+  await supabase
+    .from("invoices")
+    .update(extendedFields as never)
+    .eq("id", invoiceId)
+    .eq("user_id", user.id);
 
   revalidatePath("/dashboard");
   revalidatePath("/invoices");
   revalidatePath("/reports");
   revalidatePath("/payments");
 
-  return data;
+  return invoiceId;
 }
 
 export async function recordPaymentAction(values: Record<string, unknown>) {

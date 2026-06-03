@@ -3,7 +3,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { UserMenu } from "@/components/layout/user-menu";
 import { PageShell } from "@/components/layout/page-shell";
-import { getActiveBusiness, getSessionUser } from "@/lib/data/queries";
+import { getBusinesses, getSessionUser } from "@/lib/data/queries";
 
 export default async function AppLayout({
   children,
@@ -12,7 +12,7 @@ export default async function AppLayout({
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  const activeBusiness = await getActiveBusiness(user.id);
+  const businesses = await getBusinesses(user.id);
 
   return (
     <div className="relative">
@@ -20,7 +20,7 @@ export default async function AppLayout({
         <AppSidebar />
         <div className="min-w-0 flex-1">
           <div className="no-print mb-6 flex justify-end">
-            <UserMenu email={user.email} activeBusiness={activeBusiness?.name ?? null} />
+            <UserMenu email={user.email} businesses={businesses} />
           </div>
           {children}
         </div>
