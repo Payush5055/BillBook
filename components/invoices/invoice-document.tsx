@@ -3,10 +3,19 @@
 import Image from "next/image";
 import { forwardRef, useEffect, useState } from "react";
 import type { BusinessProfile, Customer, Invoice, InvoiceItem } from "@/lib/types";
-import { amountToWords, formatCurrency, formatDate } from "@/lib/utils";
+import { amountToWords, extractPAN, formatCurrency, formatDate, roundCurrency } from "@/lib/utils";
 
-const DEFAULT_DECLARATION =
-  "I/WE HEREBY CERTIFY THAT MY/OUR REGISTRATION GST NO. IS IN FORCE ON THE DATE ON WHICH THE SALE OF GOODS/SERVICES COVERED BY THIS GST INVOICE HAS BEEN EFFECTED BY ME/US AND IT SHALL BE ACCOUNTED FOR THE TURNOVER OF SALES WHILE FILING OF THE RETURN AND THE DUE TAX IF ANY PAYABLE ON THE SALES HAS BEEN PAID OR SHALL BE PAID.";
+// Build dynamic GST declaration from customer's GSTIN
+function buildDynamicDeclaration(customerGstin: string | null | undefined): string {
+  if (!customerGstin) {
+    return "Customer is an Unregistered Dealer (URP). I/WE HEREBY CERTIFY THAT THE SALE OF GOODS/SERVICES COVERED BY THIS GST INVOICE HAS BEEN EFFECTED BY ME/US AND IT SHALL BE ACCOUNTED FOR IN THE TURNOVER OF SALES WHILE FILING OF THE RETURN AND THE DUE TAX IF ANY PAYABLE ON THE SALES HAS BEEN PAID OR SHALL BE PAID.";
+  }
+  const pan = extractPAN(customerGstin);
+  return (
+    `I/WE HEREBY CERTIFY THAT MY/OUR REGISTRATION GST NO. ${customerGstin} CERTIFICATE UNDER THE GST ACT IS IN FORCE ON THE DATE ON WHICH THE SALE OF GOODS/SERVICES COVERED BY THIS GST INVOICE HAS BEEN EFFECTED BY ME/US AND IT SHALL BE ACCOUNTED FOR THE TURNOVER OF SALES WHILE FILING OF THE RETURN AND THE DUE TAX IF ANY PAYABLE ON THE SALES HAS BEEN PAID OR SHALL BE PAID.` +
+    (pan ? `\nPAN NO.: ${pan}` : "")
+  );
+}
 
 type InvoiceDocumentProps = {
   invoice: Invoice;
@@ -27,11 +36,17 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
 
     const isGst = invoice.document_type === "gst_invoice";
     const hasConsignee = !!invoice.consignee_name;
-    const declarationText = invoice.declaration_text || (isGst ? DEFAULT_DECLARATION : null);
     const showReceiverSig = invoice.show_receiver_signature !== false;
 
-    // Business details: use invoice snapshot (set at creation) if available,
-    // otherwise fall back to the current business_profile (legacy invoices).
+    // Declaration: use stored override if user typed something custom; otherwise auto-generate
+    const declarationText =
+      invoice.declaration_text && invoice.declaration_text.trim()
+        ? invoice.declaration_text
+        : isGst
+        ? buildDynamicDeclaration(customer.gstin)
+        : null;
+
+    // Business details: snapshot → fallback to profile
     const bizName = invoice.business_name || businessProfile.business_name;
     const bizAddress = invoice.business_address || businessProfile.address;
     const bizCity = invoice.business_city ?? null;
@@ -46,23 +61,26 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
     const bizBankName = invoice.business_bank_name || businessProfile.bank_name;
     const bizBankAccount = invoice.business_bank_account || businessProfile.bank_account_number;
     const bizBankIfsc = invoice.business_bank_ifsc || businessProfile.bank_ifsc;
+    const bizPan = bizGstin ? extractPAN(bizGstin) : null;
+    const bizFullAddress = [bizAddress, bizCity, bizState, bizPincode].filter(Boolean).join(", ");
 
-    // Build a full address line for display
-    const addressParts = [bizAddress, bizCity, bizState, bizPincode].filter(Boolean);
-    const bizFullAddress = addressParts.join(", ");
+    // Items sub-total = sum of taxable_amount per line (what Amount column shows)
+    const itemsSubtotal = roundCurrency(
+      items.reduce((s, i) => s + Number(i.taxable_amount), 0),
+    );
 
-    // Reference fields — only show non-empty ones, eway bill listed first
-    const refFields: { label: string; value: string | null | undefined }[] = [
-      { label: "e-Way Bill No", value: invoice.eway_bill_no },
-      { label: "Supplier's Ref", value: invoice.suppliers_ref },
-      { label: "Other Ref", value: invoice.other_ref },
-      { label: "Buyer Order No", value: invoice.buyer_order_no },
-      { label: "Buyer Order Date", value: invoice.buyer_order_date ? formatDate(invoice.buyer_order_date) : null },
-      { label: "Dispatch Doc No", value: invoice.dispatch_doc_no },
-      { label: "Dispatch Date", value: invoice.dispatch_date ? formatDate(invoice.dispatch_date) : null },
-      { label: "Dispatch Through", value: invoice.dispatch_through },
-      { label: "Destination", value: invoice.destination },
-    ].filter((f) => !!f.value);
+    // Total qty grouped by unit
+    const unitQtyMap: Record<string, number> = {};
+    for (const item of items) {
+      const u = (item.unit || "NOS").toUpperCase();
+      unitQtyMap[u] = (unitQtyMap[u] || 0) + Number(item.quantity);
+    }
+    const totalQtyStr = Object.entries(unitQtyMap)
+      .map(([u, q]) => `${q} ${u}`)
+      .join(" + ");
+
+    // Column count for colspan in footer rows
+    const colCount = isGst ? 8 : 6;
 
     const statusColor =
       invoice.status === "paid"
@@ -72,6 +90,18 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
         : invoice.status === "cancelled"
         ? "#dc2626"
         : "#6b7280";
+
+    // Reference fields — always shown; blank underline when empty
+    const refRows: { label: string; value: string | null | undefined }[] = [
+      { label: "e-Way Bill No", value: invoice.eway_bill_no },
+      { label: "Supplier's Ref", value: invoice.suppliers_ref },
+      { label: "Buyer Order No", value: invoice.buyer_order_no },
+      { label: "Buyer Order Date", value: invoice.buyer_order_date ? formatDate(invoice.buyer_order_date) : null },
+      { label: "Despatch Doc No", value: invoice.dispatch_doc_no },
+      { label: "Despatch Date", value: invoice.dispatch_date ? formatDate(invoice.dispatch_date) : null },
+      { label: "Despatch Through", value: invoice.dispatch_through },
+      { label: "Destination", value: invoice.destination },
+    ];
 
     return (
       <div
@@ -97,7 +127,9 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
             {bizEmail && <p className="text-sm text-slate-600">Email: {bizEmail}</p>}
             {bizGstin && (
               <p className="text-sm font-medium">
-                GSTIN: {bizGstin} | State Code: {bizStateCode}
+                GSTIN: {bizGstin}
+                {bizPan ? ` | PAN: ${bizPan}` : ""}
+                {" "}| State Code: {bizStateCode}
               </p>
             )}
           </div>
@@ -119,23 +151,36 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
           </div>
         </div>
 
-        {/* ===== REFERENCE FIELDS (includes e-Way Bill) ===== */}
-        {refFields.length > 0 && (
-          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="grid grid-cols-2 gap-x-8 gap-y-1 md:grid-cols-3">
-              {refFields.map((f) => (
-                <div key={f.label} className="flex gap-1 text-xs">
-                  <span className="font-semibold text-slate-500 whitespace-nowrap">{f.label}:</span>
-                  <span className="text-slate-700">{f.value}</span>
-                </div>
-              ))}
-            </div>
+        {/* ===== REFERENCE + TERMS SECTION (always printed) ===== */}
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          {/* Terms of Payment — always visible */}
+          <p className="mb-2 text-xs font-semibold text-slate-700">
+            Terms of Payment:{" "}
+            <span className="font-normal text-slate-900">
+              {invoice.payment_terms || "CREDIT"}
+            </span>
+          </p>
+          {/* Reference grid — always 8 rows, blank underline when empty */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+            {refRows.map((f) => (
+              <div key={f.label} className="flex items-baseline gap-1 text-xs">
+                <span className="shrink-0 font-semibold text-slate-500 whitespace-nowrap">
+                  {f.label}:
+                </span>
+                {f.value ? (
+                  <span className="text-slate-800">{f.value}</span>
+                ) : (
+                  <span className="flex-1 border-b border-slate-400 text-transparent select-none">
+                    ___________
+                  </span>
+                )}
+              </div>
+            ))}
           </div>
-        )}
+        </div>
 
         {/* ===== PARTY DETAILS ROW ===== */}
         <div className="mt-5 grid gap-6 border-b border-slate-200 pb-5 md:grid-cols-2">
-          {/* Bill To */}
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-400">Bill To</p>
             <p className="mt-2 text-lg font-bold">{customer.customer_name}</p>
@@ -154,7 +199,6 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
             )}
           </div>
 
-          {/* Consignee or Payment Details */}
           {hasConsignee ? (
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-400">Consignee</p>
@@ -208,9 +252,9 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
                 <td className="py-3 pr-3 text-slate-500 text-xs">{idx + 1}</td>
                 <td className="py-3 pr-3">
                   <p className="font-medium text-slate-900">{item.item_name}</p>
-                  {item.description ? (
+                  {item.description && (
                     <p className="mt-0.5 text-xs text-slate-500">{item.description}</p>
-                  ) : null}
+                  )}
                 </td>
                 {isGst && (
                   <td className="py-3 pr-3 text-xs font-mono text-slate-500">
@@ -223,10 +267,36 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
                 {isGst && (
                   <td className="py-3 pr-3 text-right text-slate-600">{item.gst_rate}%</td>
                 )}
-                <td className="py-3 text-right font-semibold text-slate-900">{formatCurrency(item.line_total)}</td>
+                {/* TASK 1: show taxable_amount (pre-GST) not line_total */}
+                <td className="py-3 text-right font-semibold text-slate-900">
+                  {formatCurrency(item.taxable_amount)}
+                </td>
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            {/* TASK 2: SUB TOTAL row */}
+            <tr className="border-t-2 border-slate-300 bg-slate-50">
+              <td
+                colSpan={colCount - 1}
+                className="py-2 pr-3 text-right text-xs font-bold uppercase tracking-widest text-slate-500"
+              >
+                Sub Total
+              </td>
+              <td className="py-2 text-right font-bold text-slate-900">
+                {formatCurrency(itemsSubtotal)}
+              </td>
+            </tr>
+            {/* TASK 3: Total Qty row */}
+            <tr className="border-b border-slate-200">
+              <td
+                colSpan={colCount}
+                className="py-1 pb-2 text-right text-xs text-slate-400"
+              >
+                Total Qty: {totalQtyStr}
+              </td>
+            </tr>
+          </tfoot>
         </table>
 
         {/* ===== TOTALS + SIGNATURES ===== */}
@@ -239,7 +309,6 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
               </p>
             </div>
 
-            {/* Bank details (only when consignee shown above takes the right column) */}
             {hasConsignee && (
               <div className="rounded-xl border border-slate-200 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.25em] text-slate-400">Payment Details</p>
@@ -254,10 +323,13 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
               </div>
             )}
 
+            {/* TASK 6: dynamic declaration */}
             {declarationText && (
               <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.25em] text-slate-400">Declaration</p>
-                <p className="mt-2 text-xs italic leading-5 text-slate-600">{declarationText}</p>
+                <p className="mt-2 whitespace-pre-line text-xs italic leading-5 text-slate-600">
+                  {declarationText}
+                </p>
               </div>
             )}
 
@@ -324,6 +396,7 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
               </div>
             ) : null}
 
+            {/* Signature row */}
             <div className="mt-6 flex items-end justify-between">
               {showReceiverSig && (
                 <div className="text-center">

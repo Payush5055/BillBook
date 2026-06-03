@@ -6,6 +6,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Extract PAN from GSTIN (characters at index 2–11). */
+export function extractPAN(gstin: string): string {
+  if (!gstin || gstin.length < 12) return "";
+  return gstin.substring(2, 12);
+}
+
 export function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",

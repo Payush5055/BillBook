@@ -23,8 +23,16 @@ import { formatCurrency } from "@/lib/utils";
 
 type FormValues = z.infer<typeof invoiceSchema>;
 
-const DEFAULT_DECLARATION =
-  "I/WE HEREBY CERTIFY THAT MY/OUR REGISTRATION GST NO. IS IN FORCE ON THE DATE ON WHICH THE SALE OF GOODS/SERVICES COVERED BY THIS GST INVOICE HAS BEEN EFFECTED BY ME/US AND IT SHALL BE ACCOUNTED FOR THE TURNOVER OF SALES WHILE FILING OF THE RETURN AND THE DUE TAX IF ANY PAYABLE ON THE SALES HAS BEEN PAID OR SHALL BE PAID.";
+const PAYMENT_TERMS_OPTIONS = [
+  { label: "CREDIT", value: "CREDIT" },
+  { label: "CASH", value: "CASH" },
+  { label: "ADVANCE", value: "ADVANCE" },
+  { label: "AGAINST DELIVERY", value: "AGAINST DELIVERY" },
+  { label: "30 DAYS", value: "30 DAYS" },
+  { label: "45 DAYS", value: "45 DAYS" },
+  { label: "60 DAYS", value: "60 DAYS" },
+  { label: "90 DAYS", value: "90 DAYS" },
+];
 
 function buildDefaultValues(
   customers: Customer[],
@@ -39,7 +47,7 @@ function buildDefaultValues(
       document_type: existingInvoice.document_type as FormValues["document_type"],
       issue_date: existingInvoice.issue_date,
       due_date: existingInvoice.due_date ?? "",
-      payment_terms: existingInvoice.payment_terms ?? "Due on receipt",
+      payment_terms: existingInvoice.payment_terms ?? "CREDIT",
       notes: existingInvoice.notes ?? "",
       remarks: existingInvoice.remarks ?? "",
       flat_discount: existingInvoice.invoice_discount_total,
@@ -59,7 +67,8 @@ function buildDefaultValues(
       consignee_address: existingInvoice.consignee_address ?? "",
       consignee_gstin: existingInvoice.consignee_gstin ?? "",
       consignee_state_code: existingInvoice.consignee_state_code ?? null,
-      declaration_text: existingInvoice.declaration_text ?? DEFAULT_DECLARATION,
+      // Leave declaration_text empty so document auto-generates dynamic version
+      declaration_text: existingInvoice.declaration_text ?? "",
       show_receiver_signature: existingInvoice.show_receiver_signature ?? true,
       items: items.length
         ? items.map((item) => ({
@@ -74,7 +83,7 @@ function buildDefaultValues(
             discount_percent: Number(item.discount_percent),
             discount_amount: Number(item.discount_amount),
           }))
-        : [{ item_name: "", description: "", hsn_sac_code: "", quantity: 1, unit: "NOS", rate: 0, gst_rate: 18, discount_percent: 0, discount_amount: 0 }],
+        : [defaultItem()],
     };
   }
 
@@ -83,7 +92,7 @@ function buildDefaultValues(
     document_type: "gst_invoice",
     issue_date: new Date().toISOString().slice(0, 10),
     due_date: "",
-    payment_terms: "Due on receipt",
+    payment_terms: "CREDIT",
     notes: "",
     remarks: "",
     flat_discount: 0,
@@ -103,11 +112,23 @@ function buildDefaultValues(
     consignee_address: "",
     consignee_gstin: "",
     consignee_state_code: null,
-    declaration_text: DEFAULT_DECLARATION,
+    declaration_text: "",
     show_receiver_signature: true,
-    items: [
-      { item_name: "", description: "", hsn_sac_code: "", quantity: 1, unit: "NOS", rate: 0, gst_rate: 18, discount_percent: 0, discount_amount: 0 },
-    ],
+    items: [defaultItem()],
+  };
+}
+
+function defaultItem() {
+  return {
+    item_name: "",
+    description: "",
+    hsn_sac_code: "",
+    quantity: 1,
+    unit: "NOS",
+    rate: 0,
+    gst_rate: 18,
+    discount_percent: 0,
+    discount_amount: 0,
   };
 }
 
@@ -133,10 +154,7 @@ export function InvoiceBuilder({
     defaultValues: buildDefaultValues(customers, existingInvoice),
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "items",
-  });
+  const { fields, append, remove } = useFieldArray({ control: form.control, name: "items" });
 
   const selectedCustomerId = form.watch("customer_id");
   const documentType = form.watch("document_type");
@@ -144,18 +162,20 @@ export function InvoiceBuilder({
   const amountPaid = form.watch("amount_paid");
   const items = form.watch("items");
   const showReceiverSig = form.watch("show_receiver_signature");
-  const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId);
+  const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
-  const totals = useMemo(() => {
-    return calculateInvoiceTotals({
-      businessStateCode: businessProfile.state_code,
-      customerStateCode: selectedCustomer?.state_code ?? businessProfile.state_code,
-      documentType,
-      items,
-      flatDiscount,
-      amountPaid,
-    });
-  }, [amountPaid, businessProfile.state_code, documentType, flatDiscount, items, selectedCustomer?.state_code]);
+  const totals = useMemo(
+    () =>
+      calculateInvoiceTotals({
+        businessStateCode: businessProfile.state_code,
+        customerStateCode: selectedCustomer?.state_code ?? businessProfile.state_code,
+        documentType,
+        items,
+        flatDiscount,
+        amountPaid,
+      }),
+    [amountPaid, businessProfile.state_code, documentType, flatDiscount, items, selectedCustomer?.state_code],
+  );
 
   const handleCancel = () => {
     if (form.formState.isDirty) {
@@ -171,18 +191,16 @@ export function InvoiceBuilder({
     }
     const customer = customers.find((c) => c.id === values.customer_id);
     if (!customer?.place_of_supply) {
-      return `Cannot create GST invoice: Customer '${customer?.customer_name ?? ""}' is missing Place of Supply. Please update the customer first.`;
+      return `Cannot create GST invoice: Customer '${customer?.customer_name ?? ""}' is missing Place of Supply.`;
     }
     const badIndexes = new Set<number>();
     for (let i = 0; i < values.items.length; i++) {
-      if (!values.items[i].hsn_sac_code?.trim()) {
-        badIndexes.add(i);
-      }
+      if (!values.items[i].hsn_sac_code?.trim()) badIndexes.add(i);
     }
     if (badIndexes.size > 0) {
       setInvalidHsnIndexes(badIndexes);
       const firstBad = values.items[badIndexes.values().next().value!];
-      return `Cannot create GST invoice: '${firstBad.item_name || "unnamed item"}' is missing HSN/SAC code. Please update the product first.`;
+      return `Cannot create GST invoice: '${firstBad.item_name || "unnamed item"}' is missing HSN/SAC code.`;
     }
     setInvalidHsnIndexes(new Set());
     return null;
@@ -216,14 +234,12 @@ export function InvoiceBuilder({
         if (isEditMode) {
           await updateInvoiceAction(existingInvoice!.id, values);
           toast.success("Invoice updated.");
-          const suffix = action ? `?auto=${action}` : "";
-          window.location.href = `/invoices/${existingInvoice!.id}${suffix}`;
+          window.location.href = `/invoices/${existingInvoice!.id}${action ? `?auto=${action}` : ""}`;
         } else {
           const invoiceId = await createInvoiceAction(values);
           toast.success(values.mode === "draft" ? "Draft saved." : "Invoice created.");
           if (invoiceId) {
-            const suffix = action ? `?auto=${action}` : "";
-            window.location.href = `/invoices/${invoiceId}${suffix}`;
+            window.location.href = `/invoices/${invoiceId}${action ? `?auto=${action}` : ""}`;
           }
         }
       } catch (error) {
@@ -242,21 +258,19 @@ export function InvoiceBuilder({
                 <Select
                   options={DOCUMENT_TYPES.map((item) => ({ label: item.label, value: item.value }))}
                   value={form.watch("document_type")}
-                  onChange={(event) =>
-                    form.setValue("document_type", event.target.value as FormValues["document_type"], {
-                      shouldDirty: true,
-                    })
+                  onChange={(e) =>
+                    form.setValue("document_type", e.target.value as FormValues["document_type"], { shouldDirty: true })
                   }
                 />
               </FormField>
               <FormField label="Customer">
                 <Select
-                  options={customers.map((customer) => ({
-                    label: `${customer.customer_name} • ${customer.state_code}`,
-                    value: customer.id,
+                  options={customers.map((c) => ({
+                    label: `${c.customer_name} • ${c.state_code}`,
+                    value: c.id,
                   }))}
                   value={form.watch("customer_id")}
-                  onChange={(event) => form.setValue("customer_id", event.target.value, { shouldDirty: true })}
+                  onChange={(e) => form.setValue("customer_id", e.target.value, { shouldDirty: true })}
                 />
               </FormField>
               <FormField label="Issue date">
@@ -265,8 +279,13 @@ export function InvoiceBuilder({
               <FormField label="Due date">
                 <Input type="date" {...form.register("due_date")} />
               </FormField>
-              <FormField label="Payment terms">
-                <Input {...form.register("payment_terms")} />
+              {/* TASK 4: Terms of Payment select */}
+              <FormField label="Terms of Payment">
+                <Select
+                  options={PAYMENT_TERMS_OPTIONS}
+                  value={form.watch("payment_terms") ?? "CREDIT"}
+                  onChange={(e) => form.setValue("payment_terms", e.target.value, { shouldDirty: true })}
+                />
               </FormField>
               {!isEditMode && (
                 <FormField label="Received upfront">
@@ -284,23 +303,7 @@ export function InvoiceBuilder({
                     Live GST split updates instantly as you edit quantity, rate, or place of supply.
                   </p>
                 </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() =>
-                    append({
-                      item_name: "",
-                      description: "",
-                      hsn_sac_code: "",
-                      quantity: 1,
-                      unit: "NOS",
-                      rate: 0,
-                      gst_rate: 18,
-                      discount_percent: 0,
-                      discount_amount: 0,
-                    })
-                  }
-                >
+                <Button type="button" variant="secondary" onClick={() => append(defaultItem())}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add item
                 </Button>
@@ -315,34 +318,28 @@ export function InvoiceBuilder({
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -12 }}
                       className={`rounded-[26px] border bg-white/[0.03] p-4 transition-colors ${
-                        invalidHsnIndexes.has(index)
-                          ? "border-red-500"
-                          : "border-white/10"
+                        invalidHsnIndexes.has(index) ? "border-red-500" : "border-white/10"
                       }`}
                     >
                       <div className="mb-3 flex items-end gap-3">
                         <FormField label="Preset item" className="w-36 flex-none">
                           <Select
                             placeholder="From catalog"
-                            options={products.map((product) => ({
-                              label: `${product.item_name} • ${formatCurrency(product.rate)}`,
-                              value: product.id,
+                            options={products.map((p) => ({
+                              label: `${p.item_name} • ${formatCurrency(p.rate)}`,
+                              value: p.id,
                             }))}
-                            onChange={(event) => {
-                              const selected = products.find((product) => product.id === event.target.value);
-                              if (!selected) return;
-                              form.setValue(`items.${index}.product_id`, selected.id);
-                              form.setValue(`items.${index}.item_name`, selected.item_name);
-                              form.setValue(`items.${index}.description`, selected.description ?? "");
-                              form.setValue(`items.${index}.hsn_sac_code`, selected.hsn_code ?? selected.hsn_sac_code ?? "");
-                              form.setValue(`items.${index}.rate`, selected.rate);
-                              form.setValue(`items.${index}.unit`, selected.unit);
-                              form.setValue(`items.${index}.gst_rate`, Number(selected.default_gst_rate));
-                              setInvalidHsnIndexes((prev) => {
-                                const next = new Set(prev);
-                                next.delete(index);
-                                return next;
-                              });
+                            onChange={(e) => {
+                              const sel = products.find((p) => p.id === e.target.value);
+                              if (!sel) return;
+                              form.setValue(`items.${index}.product_id`, sel.id);
+                              form.setValue(`items.${index}.item_name`, sel.item_name);
+                              form.setValue(`items.${index}.description`, sel.description ?? "");
+                              form.setValue(`items.${index}.hsn_sac_code`, sel.hsn_code ?? sel.hsn_sac_code ?? "");
+                              form.setValue(`items.${index}.rate`, sel.rate);
+                              form.setValue(`items.${index}.unit`, sel.unit);
+                              form.setValue(`items.${index}.gst_rate`, Number(sel.default_gst_rate));
+                              setInvalidHsnIndexes((prev) => { const n = new Set(prev); n.delete(index); return n; });
                             }}
                           />
                         </FormField>
@@ -354,13 +351,7 @@ export function InvoiceBuilder({
                             className="h-9"
                             placeholder="e.g. 9983"
                             {...form.register(`items.${index}.hsn_sac_code`, {
-                              onChange: () => {
-                                setInvalidHsnIndexes((prev) => {
-                                  const next = new Set(prev);
-                                  next.delete(index);
-                                  return next;
-                                });
-                              },
+                              onChange: () => setInvalidHsnIndexes((prev) => { const n = new Set(prev); n.delete(index); return n; }),
                             })}
                           />
                         </FormField>
@@ -376,9 +367,7 @@ export function InvoiceBuilder({
                       </div>
 
                       {invalidHsnIndexes.has(index) && (
-                        <p className="mb-2 text-xs text-red-400">
-                          HSN/SAC code is required for GST invoices.
-                        </p>
+                        <p className="mb-2 text-xs text-red-400">HSN/SAC code is required for GST invoices.</p>
                       )}
 
                       <div className="mb-3 grid grid-cols-4 gap-3">
@@ -395,9 +384,7 @@ export function InvoiceBuilder({
                           <select
                             className="h-9 w-full rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-teal-400"
                             value={form.watch(`items.${index}.gst_rate`) ?? 18}
-                            onChange={(e) =>
-                              form.setValue(`items.${index}.gst_rate`, Number(e.target.value))
-                            }
+                            onChange={(e) => form.setValue(`items.${index}.gst_rate`, Number(e.target.value))}
                           >
                             {GST_OPTIONS.map((v) => (
                               <option key={v} value={v}>{v}%</option>
@@ -425,7 +412,7 @@ export function InvoiceBuilder({
             </div>
           </Card>
 
-          {/* Additional Details (collapsible) */}
+          {/* Additional Details (collapsible) — TASK 9: all fields present */}
           <Card>
             <button
               type="button"
@@ -453,7 +440,6 @@ export function InvoiceBuilder({
                   className="overflow-hidden"
                 >
                   <div className="mt-6 space-y-4">
-                    {/* Row 1 */}
                     <div className="grid gap-4 md:grid-cols-3">
                       <FormField label="e-Way Bill No">
                         <Input placeholder="Enter e-Way Bill number" {...form.register("eway_bill_no")} />
@@ -465,7 +451,6 @@ export function InvoiceBuilder({
                         <Input {...form.register("other_ref")} />
                       </FormField>
                     </div>
-                    {/* Row 2 */}
                     <div className="grid gap-4 md:grid-cols-4">
                       <FormField label="Buyer Order No">
                         <Input {...form.register("buyer_order_no")} />
@@ -480,7 +465,6 @@ export function InvoiceBuilder({
                         <Input type="date" {...form.register("dispatch_date")} />
                       </FormField>
                     </div>
-                    {/* Row 3 */}
                     <div className="grid gap-4 md:grid-cols-2">
                       <FormField label="Dispatch Through">
                         <Input placeholder="Transport/courier name" {...form.register("dispatch_through")} />
@@ -519,28 +503,35 @@ export function InvoiceBuilder({
 
           {/* Declaration */}
           <Card className="space-y-4">
-            <h3 className="text-lg font-semibold">Declaration</h3>
-            <FormField label="Declaration Text">
+            <div>
+              <h3 className="text-lg font-semibold">Declaration</h3>
+              <p className="text-sm text-muted-foreground">
+                Leave blank to auto-generate from customer GSTIN/PAN on the invoice.
+              </p>
+            </div>
+            <FormField label="Custom declaration text (optional)">
               <Textarea
                 {...form.register("declaration_text")}
-                className="min-h-[120px] text-xs"
+                className="min-h-[100px] text-xs"
+                placeholder="Leave empty to use the standard GST declaration with customer GSTIN/PAN auto-inserted."
               />
             </FormField>
+            {/* TASK 8: fixed toggle layout — toggle left, label right, no overlap */}
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => form.setValue("show_receiver_signature", !showReceiverSig)}
-                className={`relative h-6 w-11 rounded-full transition-colors ${
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
                   showReceiverSig ? "bg-emerald-400" : "bg-white/20"
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  className={`absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
                     showReceiverSig ? "translate-x-5" : "translate-x-0.5"
                   }`}
                 />
               </button>
-              <span className="text-sm text-muted-foreground">Show Receiver Signature field</span>
+              <span className="text-sm text-muted-foreground">Show Receiver Signature field on invoice</span>
             </div>
           </Card>
         </div>
