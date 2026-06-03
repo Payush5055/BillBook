@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Sparkles, Trash2 } from "lucide-react";
+import { Plus, Sparkles, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { z } from "zod";
@@ -22,6 +22,9 @@ import { invoiceSchema } from "@/lib/validations";
 import { formatCurrency } from "@/lib/utils";
 
 type FormValues = z.infer<typeof invoiceSchema>;
+
+const DEFAULT_DECLARATION =
+  "I/WE HEREBY CERTIFY THAT MY/OUR REGISTRATION GST NO. IS IN FORCE ON THE DATE ON WHICH THE SALE OF GOODS/SERVICES COVERED BY THIS GST INVOICE HAS BEEN EFFECTED BY ME/US AND IT SHALL BE ACCOUNTED FOR THE TURNOVER OF SALES WHILE FILING OF THE RETURN AND THE DUE TAX IF ANY PAYABLE ON THE SALES HAS BEEN PAID OR SHALL BE PAID.";
 
 function buildDefaultValues(
   customers: Customer[],
@@ -43,6 +46,21 @@ function buildDefaultValues(
       amount_paid: existingInvoice.amount_paid,
       mode: "publish",
       source_invoice_id: existingInvoice.source_invoice_id ?? null,
+      eway_bill_no: existingInvoice.eway_bill_no ?? "",
+      suppliers_ref: existingInvoice.suppliers_ref ?? "",
+      other_ref: existingInvoice.other_ref ?? "",
+      buyer_order_no: existingInvoice.buyer_order_no ?? "",
+      buyer_order_date: existingInvoice.buyer_order_date ?? "",
+      dispatch_doc_no: existingInvoice.dispatch_doc_no ?? "",
+      dispatch_date: existingInvoice.dispatch_date ?? "",
+      dispatch_through: existingInvoice.dispatch_through ?? "",
+      destination: existingInvoice.destination ?? "",
+      consignee_name: existingInvoice.consignee_name ?? "",
+      consignee_address: existingInvoice.consignee_address ?? "",
+      consignee_gstin: existingInvoice.consignee_gstin ?? "",
+      consignee_state_code: existingInvoice.consignee_state_code ?? null,
+      declaration_text: existingInvoice.declaration_text ?? DEFAULT_DECLARATION,
+      show_receiver_signature: existingInvoice.show_receiver_signature ?? true,
       items: items.length
         ? items.map((item) => ({
             product_id: item.product_id ?? null,
@@ -72,6 +90,21 @@ function buildDefaultValues(
     amount_paid: 0,
     mode: "publish",
     source_invoice_id: null,
+    eway_bill_no: "",
+    suppliers_ref: "",
+    other_ref: "",
+    buyer_order_no: "",
+    buyer_order_date: "",
+    dispatch_doc_no: "",
+    dispatch_date: "",
+    dispatch_through: "",
+    destination: "",
+    consignee_name: "",
+    consignee_address: "",
+    consignee_gstin: "",
+    consignee_state_code: null,
+    declaration_text: DEFAULT_DECLARATION,
+    show_receiver_signature: true,
     items: [
       { item_name: "", description: "", hsn_sac_code: "", quantity: 1, unit: "NOS", rate: 0, gst_rate: 18, discount_percent: 0, discount_amount: 0 },
     ],
@@ -93,6 +126,7 @@ export function InvoiceBuilder({
   const isEditMode = !!existingInvoice;
   const [pending, startTransition] = useTransition();
   const [invalidHsnIndexes, setInvalidHsnIndexes] = useState<Set<number>>(new Set());
+  const [additionalOpen, setAdditionalOpen] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(invoiceSchema),
@@ -109,6 +143,7 @@ export function InvoiceBuilder({
   const flatDiscount = form.watch("flat_discount");
   const amountPaid = form.watch("amount_paid");
   const items = form.watch("items");
+  const showReceiverSig = form.watch("show_receiver_signature");
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId);
 
   const totals = useMemo(() => {
@@ -200,197 +235,315 @@ export function InvoiceBuilder({
   return (
     <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)}>
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <FormField label="Document type">
-              <Select
-                options={DOCUMENT_TYPES.map((item) => ({ label: item.label, value: item.value }))}
-                value={form.watch("document_type")}
-                onChange={(event) =>
-                  form.setValue("document_type", event.target.value as FormValues["document_type"], {
-                    shouldDirty: true,
-                  })
-                }
-              />
-            </FormField>
-            <FormField label="Customer">
-              <Select
-                options={customers.map((customer) => ({
-                  label: `${customer.customer_name} • ${customer.state_code}`,
-                  value: customer.id,
-                }))}
-                value={form.watch("customer_id")}
-                onChange={(event) => form.setValue("customer_id", event.target.value, { shouldDirty: true })}
-              />
-            </FormField>
-            <FormField label="Issue date">
-              <Input type="date" {...form.register("issue_date")} />
-            </FormField>
-            <FormField label="Due date">
-              <Input type="date" {...form.register("due_date")} />
-            </FormField>
-            <FormField label="Payment terms">
-              <Input {...form.register("payment_terms")} />
-            </FormField>
-            {!isEditMode && (
-              <FormField label="Received upfront">
-                <Input type="number" step="0.01" {...form.register("amount_paid", { valueAsNumber: true })} />
+        <div className="space-y-6">
+          <Card className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <FormField label="Document type">
+                <Select
+                  options={DOCUMENT_TYPES.map((item) => ({ label: item.label, value: item.value }))}
+                  value={form.watch("document_type")}
+                  onChange={(event) =>
+                    form.setValue("document_type", event.target.value as FormValues["document_type"], {
+                      shouldDirty: true,
+                    })
+                  }
+                />
               </FormField>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">Invoice items</h3>
-                <p className="text-sm text-muted-foreground">
-                  Live GST split updates instantly as you edit quantity, rate, or place of supply.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() =>
-                  append({
-                    item_name: "",
-                    description: "",
-                    hsn_sac_code: "",
-                    quantity: 1,
-                    unit: "NOS",
-                    rate: 0,
-                    gst_rate: 18,
-                    discount_percent: 0,
-                    discount_amount: 0,
-                  })
-                }
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add item
-              </Button>
+              <FormField label="Customer">
+                <Select
+                  options={customers.map((customer) => ({
+                    label: `${customer.customer_name} • ${customer.state_code}`,
+                    value: customer.id,
+                  }))}
+                  value={form.watch("customer_id")}
+                  onChange={(event) => form.setValue("customer_id", event.target.value, { shouldDirty: true })}
+                />
+              </FormField>
+              <FormField label="Issue date">
+                <Input type="date" {...form.register("issue_date")} />
+              </FormField>
+              <FormField label="Due date">
+                <Input type="date" {...form.register("due_date")} />
+              </FormField>
+              <FormField label="Payment terms">
+                <Input {...form.register("payment_terms")} />
+              </FormField>
+              {!isEditMode && (
+                <FormField label="Received upfront">
+                  <Input type="number" step="0.01" {...form.register("amount_paid", { valueAsNumber: true })} />
+                </FormField>
+              )}
             </div>
 
+            {/* Invoice items */}
             <div className="space-y-4">
-              <AnimatePresence initial={false}>
-                {fields.map((field, index) => (
-                  <motion.div
-                    key={field.id}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -12 }}
-                    className={`rounded-[26px] border bg-white/[0.03] p-4 transition-colors ${
-                      invalidHsnIndexes.has(index)
-                        ? "border-red-500"
-                        : "border-white/10"
-                    }`}
-                  >
-                    {/* Row 1: Preset item | Item name | HSN/SAC | Trash */}
-                    <div className="mb-3 flex items-end gap-3">
-                      <FormField label="Preset item" className="w-36 flex-none">
-                        <Select
-                          placeholder="From catalog"
-                          options={products.map((product) => ({
-                            label: `${product.item_name} • ${formatCurrency(product.rate)}`,
-                            value: product.id,
-                          }))}
-                          onChange={(event) => {
-                            const selected = products.find((product) => product.id === event.target.value);
-                            if (!selected) return;
-                            form.setValue(`items.${index}.product_id`, selected.id);
-                            form.setValue(`items.${index}.item_name`, selected.item_name);
-                            form.setValue(`items.${index}.description`, selected.description ?? "");
-                            form.setValue(`items.${index}.hsn_sac_code`, selected.hsn_code ?? selected.hsn_sac_code ?? "");
-                            form.setValue(`items.${index}.rate`, selected.rate);
-                            form.setValue(`items.${index}.unit`, selected.unit);
-                            form.setValue(`items.${index}.gst_rate`, Number(selected.default_gst_rate));
-                            setInvalidHsnIndexes((prev) => {
-                              const next = new Set(prev);
-                              next.delete(index);
-                              return next;
-                            });
-                          }}
-                        />
-                      </FormField>
-                      <FormField label="Item name" className="flex-1 min-w-0">
-                        <Input className="h-9" placeholder="Goods / service description" {...form.register(`items.${index}.item_name`)} />
-                      </FormField>
-                      <FormField label="HSN / SAC" className="w-28 flex-none">
-                        <Input
-                          className="h-9"
-                          placeholder="e.g. 9983"
-                          {...form.register(`items.${index}.hsn_sac_code`, {
-                            onChange: () => {
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Invoice items</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Live GST split updates instantly as you edit quantity, rate, or place of supply.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() =>
+                    append({
+                      item_name: "",
+                      description: "",
+                      hsn_sac_code: "",
+                      quantity: 1,
+                      unit: "NOS",
+                      rate: 0,
+                      gst_rate: 18,
+                      discount_percent: 0,
+                      discount_amount: 0,
+                    })
+                  }
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add item
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                <AnimatePresence initial={false}>
+                  {fields.map((field, index) => (
+                    <motion.div
+                      key={field.id}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      className={`rounded-[26px] border bg-white/[0.03] p-4 transition-colors ${
+                        invalidHsnIndexes.has(index)
+                          ? "border-red-500"
+                          : "border-white/10"
+                      }`}
+                    >
+                      <div className="mb-3 flex items-end gap-3">
+                        <FormField label="Preset item" className="w-36 flex-none">
+                          <Select
+                            placeholder="From catalog"
+                            options={products.map((product) => ({
+                              label: `${product.item_name} • ${formatCurrency(product.rate)}`,
+                              value: product.id,
+                            }))}
+                            onChange={(event) => {
+                              const selected = products.find((product) => product.id === event.target.value);
+                              if (!selected) return;
+                              form.setValue(`items.${index}.product_id`, selected.id);
+                              form.setValue(`items.${index}.item_name`, selected.item_name);
+                              form.setValue(`items.${index}.description`, selected.description ?? "");
+                              form.setValue(`items.${index}.hsn_sac_code`, selected.hsn_code ?? selected.hsn_sac_code ?? "");
+                              form.setValue(`items.${index}.rate`, selected.rate);
+                              form.setValue(`items.${index}.unit`, selected.unit);
+                              form.setValue(`items.${index}.gst_rate`, Number(selected.default_gst_rate));
                               setInvalidHsnIndexes((prev) => {
                                 const next = new Set(prev);
                                 next.delete(index);
                                 return next;
                               });
-                            },
-                          })}
-                        />
-                      </FormField>
-                      <button
-                        type="button"
-                        className="mb-1 self-end text-red-400/60 transition-colors hover:text-red-400 disabled:opacity-30"
-                        onClick={() => remove(index)}
-                        disabled={fields.length === 1}
-                        aria-label="Remove item"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    {invalidHsnIndexes.has(index) && (
-                      <p className="mb-2 text-xs text-red-400">
-                        HSN/SAC code is required for GST invoices.
-                      </p>
-                    )}
-
-                    {/* Row 2: Unit | Qty | Rate | GST % */}
-                    <div className="mb-3 grid grid-cols-4 gap-3">
-                      <FormField label="Unit">
-                        <Input className="h-9" placeholder="NOS" {...form.register(`items.${index}.unit`)} />
-                      </FormField>
-                      <FormField label="Qty">
-                        <Input className="h-9" type="number" step={1} min={0} {...form.register(`items.${index}.quantity`, { valueAsNumber: true })} />
-                      </FormField>
-                      <FormField label="Rate ₹">
-                        <Input className="h-9" type="number" step="0.01" min={0} {...form.register(`items.${index}.rate`, { valueAsNumber: true })} />
-                      </FormField>
-                      <FormField label="GST %">
-                        <select
-                          className="h-9 w-full rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-teal-400"
-                          value={form.watch(`items.${index}.gst_rate`) ?? 18}
-                          onChange={(e) =>
-                            form.setValue(`items.${index}.gst_rate`, Number(e.target.value))
-                          }
+                            }}
+                          />
+                        </FormField>
+                        <FormField label="Item name" className="flex-1 min-w-0">
+                          <Input className="h-9" placeholder="Goods / service description" {...form.register(`items.${index}.item_name`)} />
+                        </FormField>
+                        <FormField label="HSN / SAC" className="w-28 flex-none">
+                          <Input
+                            className="h-9"
+                            placeholder="e.g. 9983"
+                            {...form.register(`items.${index}.hsn_sac_code`, {
+                              onChange: () => {
+                                setInvalidHsnIndexes((prev) => {
+                                  const next = new Set(prev);
+                                  next.delete(index);
+                                  return next;
+                                });
+                              },
+                            })}
+                          />
+                        </FormField>
+                        <button
+                          type="button"
+                          className="mb-1 self-end text-red-400/60 transition-colors hover:text-red-400 disabled:opacity-30"
+                          onClick={() => remove(index)}
+                          disabled={fields.length === 1}
+                          aria-label="Remove item"
                         >
-                          {GST_OPTIONS.map((v) => (
-                            <option key={v} value={v}>{v}%</option>
-                          ))}
-                        </select>
-                      </FormField>
-                    </div>
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
 
-                    {/* Row 3: Discount % | Flat discount ₹ */}
-                    <div className="mb-3 grid grid-cols-2 gap-3">
-                      <FormField label="Discount %">
-                        <Input className="h-9" type="number" step="0.01" min={0} max={100} placeholder="0" {...form.register(`items.${index}.discount_percent`, { valueAsNumber: true })} />
-                      </FormField>
-                      <FormField label="Flat discount ₹">
-                        <Input className="h-9" type="number" step="0.01" min={0} placeholder="0" {...form.register(`items.${index}.discount_amount`, { valueAsNumber: true })} />
-                      </FormField>
-                    </div>
+                      {invalidHsnIndexes.has(index) && (
+                        <p className="mb-2 text-xs text-red-400">
+                          HSN/SAC code is required for GST invoices.
+                        </p>
+                      )}
 
-                    {/* Row 4: Description */}
-                    <FormField label="Description">
-                      <Textarea {...form.register(`items.${index}.description`)} className="min-h-[80px]" />
-                    </FormField>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+                      <div className="mb-3 grid grid-cols-4 gap-3">
+                        <FormField label="Unit">
+                          <Input className="h-9" placeholder="NOS" {...form.register(`items.${index}.unit`)} />
+                        </FormField>
+                        <FormField label="Qty">
+                          <Input className="h-9" type="number" step={1} min={0} {...form.register(`items.${index}.quantity`, { valueAsNumber: true })} />
+                        </FormField>
+                        <FormField label="Rate ₹">
+                          <Input className="h-9" type="number" step="0.01" min={0} {...form.register(`items.${index}.rate`, { valueAsNumber: true })} />
+                        </FormField>
+                        <FormField label="GST %">
+                          <select
+                            className="h-9 w-full rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-teal-400"
+                            value={form.watch(`items.${index}.gst_rate`) ?? 18}
+                            onChange={(e) =>
+                              form.setValue(`items.${index}.gst_rate`, Number(e.target.value))
+                            }
+                          >
+                            {GST_OPTIONS.map((v) => (
+                              <option key={v} value={v}>{v}%</option>
+                            ))}
+                          </select>
+                        </FormField>
+                      </div>
+
+                      <div className="mb-3 grid grid-cols-2 gap-3">
+                        <FormField label="Discount %">
+                          <Input className="h-9" type="number" step="0.01" min={0} max={100} placeholder="0" {...form.register(`items.${index}.discount_percent`, { valueAsNumber: true })} />
+                        </FormField>
+                        <FormField label="Flat discount ₹">
+                          <Input className="h-9" type="number" step="0.01" min={0} placeholder="0" {...form.register(`items.${index}.discount_amount`, { valueAsNumber: true })} />
+                        </FormField>
+                      </div>
+
+                      <FormField label="Description">
+                        <Textarea {...form.register(`items.${index}.description`)} className="min-h-[80px]" />
+                      </FormField>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+
+          {/* Additional Details (collapsible) */}
+          <Card>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between"
+              onClick={() => setAdditionalOpen((v) => !v)}
+            >
+              <div>
+                <h3 className="text-lg font-semibold">Additional Details</h3>
+                <p className="text-sm text-muted-foreground">e-Way bill, buyer order, dispatch info</p>
+              </div>
+              {additionalOpen ? (
+                <ChevronUp className="h-5 w-5 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-5 w-5 text-muted-foreground" />
+              )}
+            </button>
+
+            <AnimatePresence initial={false}>
+              {additionalOpen && (
+                <motion.div
+                  key="additional"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-6 space-y-4">
+                    {/* Row 1 */}
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <FormField label="e-Way Bill No">
+                        <Input placeholder="Enter e-Way Bill number" {...form.register("eway_bill_no")} />
+                      </FormField>
+                      <FormField label="Supplier's Ref">
+                        <Input placeholder="Your reference" {...form.register("suppliers_ref")} />
+                      </FormField>
+                      <FormField label="Other Reference">
+                        <Input {...form.register("other_ref")} />
+                      </FormField>
+                    </div>
+                    {/* Row 2 */}
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <FormField label="Buyer Order No">
+                        <Input {...form.register("buyer_order_no")} />
+                      </FormField>
+                      <FormField label="Buyer Order Date">
+                        <Input type="date" {...form.register("buyer_order_date")} />
+                      </FormField>
+                      <FormField label="Dispatch Doc No">
+                        <Input {...form.register("dispatch_doc_no")} />
+                      </FormField>
+                      <FormField label="Dispatch Date">
+                        <Input type="date" {...form.register("dispatch_date")} />
+                      </FormField>
+                    </div>
+                    {/* Row 3 */}
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <FormField label="Dispatch Through">
+                        <Input placeholder="Transport/courier name" {...form.register("dispatch_through")} />
+                      </FormField>
+                      <FormField label="Destination">
+                        <Input placeholder="Delivery destination" {...form.register("destination")} />
+                      </FormField>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </Card>
+
+          {/* Consignee Details */}
+          <Card className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold">Consignee Details</h3>
+              <p className="text-sm text-muted-foreground">Leave blank if same as customer</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField label="Consignee Name">
+                <Input {...form.register("consignee_name")} />
+              </FormField>
+              <FormField label="Consignee GSTIN">
+                <Input {...form.register("consignee_gstin")} />
+              </FormField>
+              <FormField label="Consignee Address" className="col-span-2">
+                <Textarea {...form.register("consignee_address")} className="min-h-[80px]" />
+              </FormField>
+              <FormField label="Consignee State Code">
+                <Input type="number" {...form.register("consignee_state_code", { valueAsNumber: true })} />
+              </FormField>
+            </div>
+          </Card>
+
+          {/* Declaration */}
+          <Card className="space-y-4">
+            <h3 className="text-lg font-semibold">Declaration</h3>
+            <FormField label="Declaration Text">
+              <Textarea
+                {...form.register("declaration_text")}
+                className="min-h-[120px] text-xs"
+              />
+            </FormField>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => form.setValue("show_receiver_signature", !showReceiverSig)}
+                className={`relative h-6 w-11 rounded-full transition-colors ${
+                  showReceiverSig ? "bg-emerald-400" : "bg-white/20"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    showReceiverSig ? "translate-x-5" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+              <span className="text-sm text-muted-foreground">Show Receiver Signature field</span>
+            </div>
+          </Card>
+        </div>
 
         <div className="space-y-6">
           <Card>

@@ -1,6 +1,7 @@
 import { subMonths, startOfMonth } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import type {
+  Business,
   BusinessProfile,
   Customer,
   InvoiceDetailRecord,
@@ -30,6 +31,27 @@ export async function getBusinessProfile(userId: string): Promise<BusinessProfil
     .eq("user_id", userId)
     .maybeSingle();
   return data;
+}
+
+export async function getBusinesses(userId: string): Promise<Business[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("businesses")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  return (data ?? []) as Business[];
+}
+
+export async function getActiveBusiness(userId: string): Promise<Business | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("businesses")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .maybeSingle();
+  return data as Business | null;
 }
 
 export async function getCustomers(userId: string, search?: string): Promise<Customer[]> {
@@ -116,7 +138,16 @@ export async function getInvoiceById(
   const supabase = await createClient();
   const { data: invoice } = await supabase
     .from("invoices")
-    .select("*, customers(*), invoice_items(*), payments(*)")
+    .select(`
+      *,
+      eway_bill_no, suppliers_ref, other_ref,
+      buyer_order_no, buyer_order_date,
+      dispatch_doc_no, dispatch_date,
+      dispatch_through, destination,
+      consignee_name, consignee_address, consignee_gstin, consignee_state_code,
+      declaration_text, show_receiver_signature,
+      customers(*), invoice_items(*), payments(*)
+    `)
     .eq("user_id", userId)
     .eq("id", invoiceId)
     .is("deleted_at", null)

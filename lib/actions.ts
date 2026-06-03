@@ -6,7 +6,7 @@ import type { Database } from "@/lib/database.types";
 import { calculateInvoiceTotals, resolveInvoiceStatus } from "@/lib/gst";
 import { createClient } from "@/lib/supabase/server";
 import { uploadAsset } from "@/lib/supabase/storage";
-import type { BusinessProfile, Customer, Invoice } from "@/lib/types";
+import type { Business, BusinessProfile, Customer, Invoice } from "@/lib/types";
 import {
   authSchema,
   businessProfileSchema,
@@ -19,6 +19,25 @@ import { amountToWords, financialYearFromDate } from "@/lib/utils";
 
 function normalizeOptional(value?: string | null) {
   return value ? value : null;
+}
+
+function formatInvoiceNumber(
+  format: string,
+  series: string,
+  counter: number,
+  issueDate: string,
+): string {
+  const date = new Date(issueDate);
+  const yy = String(date.getFullYear()).slice(2);
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const nnn = String(counter).padStart(3, "0");
+  const nnnnnn = String(counter).padStart(6, "0");
+  return format
+    .replace("{YY}", yy)
+    .replace("{MM}", mm)
+    .replace("{NNNNNN}", nnnnnn)
+    .replace("{NNN}", nnn)
+    .replace("{series}", series);
 }
 
 async function getCurrentUserOrThrow() {
@@ -44,6 +63,50 @@ export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+export async function setActiveBusinessAction(businessId: string) {
+  const { supabase, user } = await getCurrentUserOrThrow();
+  // Deactivate all
+  await supabase
+    .from("businesses")
+    .update({ is_active: false } as never)
+    .eq("user_id", user.id);
+  // Activate selected
+  const { error } = await supabase
+    .from("businesses")
+    .update({ is_active: true } as never)
+    .eq("id", businessId)
+    .eq("user_id", user.id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+}
+
+export async function createBusinessAction(values: Record<string, unknown>) {
+  const { supabase, user } = await getCurrentUserOrThrow();
+  const { error } = await supabase.from("businesses").insert({
+    user_id: user.id,
+    name: String(values.name ?? ""),
+    address: normalizeOptional(values.address as string),
+    city: normalizeOptional(values.city as string),
+    state: normalizeOptional(values.state as string),
+    pincode: normalizeOptional(values.pincode as string),
+    gstin: normalizeOptional(values.gstin as string),
+    state_code: values.state_code ? Number(values.state_code) : null,
+    phone: normalizeOptional(values.phone as string),
+    email: normalizeOptional(values.email as string),
+    website: normalizeOptional(values.website as string),
+    bank_name: normalizeOptional(values.bank_name as string),
+    bank_account: normalizeOptional(values.bank_account as string),
+    bank_ifsc: normalizeOptional(values.bank_ifsc as string),
+    is_active: false,
+    invoice_series: String(values.invoice_series ?? "INV"),
+    invoice_counter: 0,
+    invoice_format: String(values.invoice_format ?? "{series}/{YY}{MM}/{NNN}"),
+  } as never);
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
 }
 
 export async function upsertBusinessProfileAction(values: Record<string, unknown>) {
@@ -176,8 +239,9 @@ export async function createInvoiceAction(values: Record<string, unknown>) {
   const payload = invoiceSchema.parse(values);
   const { supabase, user } = await getCurrentUserOrThrow();
 
-  const [{ data: businessProfileData }, { data: customerData }] = await Promise.all([
+  const [{ data: businessProfileData }, { data: activeBusinessData }, { data: customerData }] = await Promise.all([
     supabase.from("business_profiles").select("*").eq("user_id", user.id).maybeSingle(),
+    supabase.from("businesses").select("*").eq("user_id", user.id).eq("is_active", true).maybeSingle(),
     supabase
       .from("customers")
       .select("*")
@@ -187,6 +251,7 @@ export async function createInvoiceAction(values: Record<string, unknown>) {
   ]);
 
   const businessProfile = businessProfileData as BusinessProfile | null;
+  const activeBusiness = activeBusinessData as Business | null;
   const customer = customerData as Customer | null;
 
   if (!businessProfile) throw new Error("Complete business setup before creating invoices.");
@@ -200,8 +265,12 @@ export async function createInvoiceAction(values: Record<string, unknown>) {
     throw new Error("This financial year is locked in settings.");
   }
 
+  const businessStateCode = activeBusiness?.state_code
+    ? String(activeBusiness.state_code)
+    : businessProfile.state_code;
+
   const totals = calculateInvoiceTotals({
-    businessStateCode: businessProfile.state_code,
+    businessStateCode,
     customerStateCode: customer.state_code,
     documentType: payload.document_type,
     items: payload.items,
@@ -210,19 +279,42 @@ export async function createInvoiceAction(values: Record<string, unknown>) {
   });
 
   const fy = financialYearFromDate(payload.issue_date);
-  const { data: existingSequenceData } = await supabase
-    .from("invoices")
-    .select("sequence_number")
-    .eq("user_id", user.id)
-    .eq("financial_year_label", fy.label)
-    .eq("document_type", payload.document_type)
-    .order("sequence_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let invoiceNumber: string;
+  let sequenceNumber: number;
 
-  const existingSequence = existingSequenceData as { sequence_number: number } | null;
-  const sequenceNumber = (existingSequence?.sequence_number ?? 0) + 1;
-  const invoiceNumber = `${businessProfile.invoice_prefix}/${fy.label}/${String(sequenceNumber).padStart(3, "0")}`;
+  if (activeBusiness) {
+    // Use per-business invoice series
+    const newCounter = (activeBusiness.invoice_counter ?? 0) + 1;
+    invoiceNumber = formatInvoiceNumber(
+      activeBusiness.invoice_format,
+      activeBusiness.invoice_series,
+      newCounter,
+      payload.issue_date,
+    );
+    sequenceNumber = newCounter;
+    // Increment counter in businesses table
+    await supabase
+      .from("businesses")
+      .update({ invoice_counter: newCounter } as never)
+      .eq("id", activeBusiness.id)
+      .eq("user_id", user.id);
+  } else {
+    // Fallback: legacy sequence
+    const { data: existingSequenceData } = await supabase
+      .from("invoices")
+      .select("sequence_number")
+      .eq("user_id", user.id)
+      .eq("financial_year_label", fy.label)
+      .eq("document_type", payload.document_type)
+      .order("sequence_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const existingSequence = existingSequenceData as { sequence_number: number } | null;
+    sequenceNumber = (existingSequence?.sequence_number ?? 0) + 1;
+    invoiceNumber = `${businessProfile.invoice_prefix}/${fy.label}/${String(sequenceNumber).padStart(3, "0")}`;
+  }
+
   const status =
     payload.mode === "draft"
       ? "draft"
@@ -256,6 +348,21 @@ export async function createInvoiceAction(values: Record<string, unknown>) {
     amount_paid: payload.amount_paid,
     amount_due: totals.amountDue,
     amount_in_words: totals.amountInWords,
+    eway_bill_no: normalizeOptional(payload.eway_bill_no),
+    suppliers_ref: normalizeOptional(payload.suppliers_ref),
+    other_ref: normalizeOptional(payload.other_ref),
+    buyer_order_no: normalizeOptional(payload.buyer_order_no),
+    buyer_order_date: normalizeOptional(payload.buyer_order_date),
+    dispatch_doc_no: normalizeOptional(payload.dispatch_doc_no),
+    dispatch_date: normalizeOptional(payload.dispatch_date),
+    dispatch_through: normalizeOptional(payload.dispatch_through),
+    destination: normalizeOptional(payload.destination),
+    consignee_name: normalizeOptional(payload.consignee_name),
+    consignee_address: normalizeOptional(payload.consignee_address),
+    consignee_gstin: normalizeOptional(payload.consignee_gstin),
+    consignee_state_code: payload.consignee_state_code ?? null,
+    declaration_text: normalizeOptional(payload.declaration_text),
+    show_receiver_signature: payload.show_receiver_signature ?? true,
     items: totals.items,
   };
 
@@ -416,6 +523,21 @@ export async function updateInvoiceAction(invoiceId: string, values: Record<stri
       amount_paid: payload.amount_paid,
       amount_due: totals.amountDue,
       amount_in_words: totals.amountInWords,
+      eway_bill_no: normalizeOptional(payload.eway_bill_no),
+      suppliers_ref: normalizeOptional(payload.suppliers_ref),
+      other_ref: normalizeOptional(payload.other_ref),
+      buyer_order_no: normalizeOptional(payload.buyer_order_no),
+      buyer_order_date: normalizeOptional(payload.buyer_order_date),
+      dispatch_doc_no: normalizeOptional(payload.dispatch_doc_no),
+      dispatch_date: normalizeOptional(payload.dispatch_date),
+      dispatch_through: normalizeOptional(payload.dispatch_through),
+      destination: normalizeOptional(payload.destination),
+      consignee_name: normalizeOptional(payload.consignee_name),
+      consignee_address: normalizeOptional(payload.consignee_address),
+      consignee_gstin: normalizeOptional(payload.consignee_gstin),
+      consignee_state_code: payload.consignee_state_code ?? null,
+      declaration_text: normalizeOptional(payload.declaration_text),
+      show_receiver_signature: payload.show_receiver_signature ?? true,
     } as never)
     .eq("id", invoiceId)
     .eq("user_id", user.id);
@@ -515,6 +637,28 @@ export async function softDeleteInvoiceAction(invoiceId: string) {
     .eq("id", invoiceId)
     .eq("user_id", user.id);
   if (error) throw new Error(error.message);
+  revalidatePath("/invoices");
+  revalidatePath("/dashboard");
+}
+
+export async function hardDeleteInvoiceAction(invoiceId: string) {
+  const { supabase, user } = await getCurrentUserOrThrow();
+  // Verify ownership
+  const { data: inv } = await supabase
+    .from("invoices")
+    .select("id")
+    .eq("id", invoiceId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!inv) throw new Error("Invoice not found.");
+
+  // Delete items first (cascade not guaranteed via RLS)
+  await supabase.from("invoice_items").delete().eq("invoice_id", invoiceId);
+  await supabase.from("payments").delete().eq("invoice_id", invoiceId);
+
+  const { error } = await supabase.from("invoices").delete().eq("id", invoiceId).eq("user_id", user.id);
+  if (error) throw new Error(error.message);
+
   revalidatePath("/invoices");
   revalidatePath("/dashboard");
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CreditCard, Mail, Pencil } from "lucide-react";
+import { CreditCard, Mail, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PaymentForm } from "@/components/forms/payment-form";
@@ -11,6 +11,7 @@ import { Dialog } from "@/components/ui/dialog";
 import {
   cancelInvoiceAction,
   duplicateInvoiceAction,
+  hardDeleteInvoiceAction,
   markInvoiceUnpaidAction,
   sendInvoiceEmailAction,
 } from "@/lib/actions";
@@ -32,8 +33,10 @@ export function InvoiceDetailControls({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [emailPending, startEmailTransition] = useTransition();
   const [pending, startTransition] = useTransition();
+  const [deletePending, startDeleteTransition] = useTransition();
 
   const convertToInvoice = () => {
     startTransition(async () => {
@@ -80,6 +83,18 @@ export function InvoiceDetailControls({
     });
   };
 
+  const confirmDelete = () => {
+    startDeleteTransition(async () => {
+      try {
+        await hardDeleteInvoiceAction(invoiceId);
+        toast.success("Invoice deleted.");
+        router.push("/invoices");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Unable to delete invoice.");
+      }
+    });
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-3">
       <Button type="button" variant="secondary" onClick={() => setOpen(true)} disabled={amountDue <= 0}>
@@ -112,6 +127,16 @@ export function InvoiceDetailControls({
       <Button type="button" variant="ghost" onClick={cancelDocument} disabled={pending}>
         Cancel invoice
       </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        className="text-red-400 hover:bg-red-400/10 hover:text-red-300"
+        onClick={() => setDeleteOpen(true)}
+        disabled={deletePending}
+      >
+        <Trash2 className="mr-2 h-4 w-4" />
+        Delete
+      </Button>
       <InvoiceActions targetId="invoice-document" invoiceNumber={invoiceNumber} autoAction={autoAction} invoiceId={invoiceId} />
 
       <Dialog
@@ -121,6 +146,27 @@ export function InvoiceDetailControls({
         description="Track partial and full payments against this invoice."
       >
         <PaymentForm invoiceId={invoiceId} maxAmount={amountDue} onSuccess={() => setOpen(false)} />
+      </Dialog>
+
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete invoice"
+        description={`Are you sure you want to delete invoice ${invoiceNumber}? This action cannot be undone.`}
+      >
+        <div className="flex gap-3 pt-2">
+          <Button
+            type="button"
+            className="bg-red-500 hover:bg-red-600 text-white"
+            onClick={confirmDelete}
+            disabled={deletePending}
+          >
+            {deletePending ? "Deleting..." : "Yes, delete invoice"}
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => setDeleteOpen(false)} disabled={deletePending}>
+            Cancel
+          </Button>
+        </div>
       </Dialog>
     </div>
   );

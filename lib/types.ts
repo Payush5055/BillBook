@@ -1,5 +1,6 @@
 import type { Database } from "@/lib/database.types";
 
+export type Business = Database["public"]["Tables"]["businesses"]["Row"];
 export type Customer = Database["public"]["Tables"]["customers"]["Row"];
 export type Product = Database["public"]["Tables"]["products"]["Row"];
 export type BusinessProfile = Database["public"]["Tables"]["business_profiles"]["Row"];

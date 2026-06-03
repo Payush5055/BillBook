@@ -3,6 +3,36 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      businesses: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          address: string | null;
+          city: string | null;
+          state: string | null;
+          pincode: string | null;
+          gstin: string | null;
+          state_code: number | null;
+          phone: string | null;
+          email: string | null;
+          website: string | null;
+          bank_name: string | null;
+          bank_account: string | null;
+          bank_ifsc: string | null;
+          is_active: boolean;
+          invoice_series: string;
+          invoice_counter: number;
+          invoice_format: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["businesses"]["Row"]> & {
+          user_id: string;
+          name: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["businesses"]["Row"]>;
+      };
       business_profiles: {
         Row: {
           user_id: string;
@@ -122,6 +152,22 @@ export type Database = {
           ack_number: string | null;
           ack_date: string | null;
           irn_generated_at: string | null;
+          // New fields (Task 3)
+          eway_bill_no: string | null;
+          suppliers_ref: string | null;
+          other_ref: string | null;
+          buyer_order_no: string | null;
+          buyer_order_date: string | null;
+          dispatch_doc_no: string | null;
+          dispatch_date: string | null;
+          dispatch_through: string | null;
+          destination: string | null;
+          consignee_name: string | null;
+          consignee_address: string | null;
+          consignee_gstin: string | null;
+          consignee_state_code: number | null;
+          declaration_text: string | null;
+          show_receiver_signature: boolean;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
